@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deckhouse/deckhouse/go_lib/updater"
+
 	"github.com/Masterminds/semver/v3"
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook/metrics"
@@ -36,7 +38,7 @@ import (
 	"github.com/deckhouse/deckhouse/go_lib/dependency/cr"
 	"github.com/deckhouse/deckhouse/go_lib/hooks/update"
 	"github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/apis/v1alpha1"
-	"github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
+	d8updater "github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
 )
 
 var _ = sdk.RegisterFunc(&go_hook.HookConfig{
@@ -223,7 +225,7 @@ func filterDeckhouseRelease(unstructured *unstructured.Unstructured) (go_hook.Fi
 		return nil, err
 	}
 
-	var annotationFlags updater.DeckhouseReleaseAnnotationsFlags
+	var annotationFlags d8updater.DeckhouseReleaseAnnotationsFlags
 
 	if v, ok := release.Annotations["release.deckhouse.io/suspended"]; ok {
 		if v == "true" {
@@ -272,7 +274,7 @@ func filterDeckhouseRelease(unstructured *unstructured.Unstructured) (go_hook.Fi
 		}
 	}
 
-	return updater.DeckhouseRelease{
+	return &d8updater.DeckhouseRelease{
 		Name:          release.Name,
 		Version:       semver.MustParse(release.Spec.Version),
 		ApplyAfter:    release.Spec.ApplyAfter,

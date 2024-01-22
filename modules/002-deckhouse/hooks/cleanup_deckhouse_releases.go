@@ -20,13 +20,15 @@ import (
 	"sort"
 	"time"
 
+	"github.com/deckhouse/deckhouse/go_lib/updater"
+
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
 	"github.com/flant/addon-operator/sdk"
 	"github.com/flant/shell-operator/pkg/kube/object_patch"
 	"k8s.io/utils/pointer"
 
 	"github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/apis/v1alpha1"
-	"github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
+	d8updater "github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
 )
 
 /*
@@ -58,12 +60,12 @@ func cleanupReleases(input *go_hook.HookInput) error {
 
 	now := time.Now().UTC()
 
-	releases := make([]updater.DeckhouseRelease, 0, len(snap))
+	releases := make([]*d8updater.DeckhouseRelease, 0, len(snap))
 	for _, sn := range snap {
-		releases = append(releases, sn.(updater.DeckhouseRelease))
+		releases = append(releases, sn.(*d8updater.DeckhouseRelease))
 	}
 
-	sort.Sort(sort.Reverse(updater.ByVersion(releases)))
+	sort.Sort(sort.Reverse(updater.ByVersion[*d8updater.DeckhouseRelease](releases)))
 
 	var (
 		pendingReleasesIndexes  []int
@@ -86,7 +88,7 @@ func cleanupReleases(input *go_hook.HookInput) error {
 
 	if len(deployedReleasesIndexes) > 1 {
 		// cleanup releases stacked in Deployed status
-		sp := updater.StatusPatch{
+		sp := d8updater.StatusPatch{
 			Phase:          v1alpha1.PhaseSuperseded,
 			TransitionTime: now,
 		}
@@ -111,7 +113,7 @@ func cleanupReleases(input *go_hook.HookInput) error {
 	// mark them as Skipped
 	if len(deployedReleasesIndexes) > 0 && len(pendingReleasesIndexes) > 0 {
 		lastDeployed := deployedReleasesIndexes[0] // releases are reversed, that's why we have to take the first one (latest Deployed release)
-		sp := updater.StatusPatch{
+		sp := d8updater.StatusPatch{
 			Phase:          v1alpha1.PhaseSkipped,
 			Message:        "Skipped by cleanup hook",
 			TransitionTime: now,

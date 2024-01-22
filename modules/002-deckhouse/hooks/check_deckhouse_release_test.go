@@ -26,6 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deckhouse/deckhouse/go_lib/updater"
+	d8updater "github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
+
 	"github.com/Masterminds/semver/v3"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/fake"
@@ -36,7 +39,6 @@ import (
 
 	"github.com/deckhouse/deckhouse/go_lib/dependency"
 	"github.com/deckhouse/deckhouse/go_lib/dependency/cr"
-	"github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
 	. "github.com/deckhouse/deckhouse/testing/hooks"
 )
 
@@ -670,8 +672,8 @@ func TestSort(t *testing.T) {
 		Version: semver.MustParse("v1.29.4"),
 	}
 
-	releases := []updater.DeckhouseRelease{s3, s4, s1, s5, s2}
-	sort.Sort(sort.Reverse(updater.ByVersion(releases)))
+	releases := []*d8updater.DeckhouseRelease{s3, s4, s1, s5, s2}
+	sort.Sort(sort.Reverse(updater.ByVersion[*d8updater.DeckhouseRelease](releases)))
 
 	for i, rl := range releases {
 		if rl.Version.String() != "1.29."+strconv.FormatInt(int64(4-i), 10) {
