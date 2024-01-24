@@ -27,8 +27,6 @@ import (
 	"sort"
 	"time"
 
-	d8updater "github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
-
 	"github.com/Masterminds/semver/v3"
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook/metrics"
@@ -48,6 +46,7 @@ import (
 	"github.com/deckhouse/deckhouse/go_lib/libapi"
 	"github.com/deckhouse/deckhouse/go_lib/updater"
 	"github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/apis/v1alpha1"
+	d8updater "github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
 )
 
 const (

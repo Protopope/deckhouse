@@ -21,8 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deckhouse/deckhouse/go_lib/updater"
-
 	"github.com/Masterminds/semver/v3"
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook/metrics"
@@ -37,6 +35,7 @@ import (
 	"github.com/deckhouse/deckhouse/go_lib/dependency"
 	"github.com/deckhouse/deckhouse/go_lib/dependency/cr"
 	"github.com/deckhouse/deckhouse/go_lib/hooks/update"
+	"github.com/deckhouse/deckhouse/go_lib/updater"
 	"github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/apis/v1alpha1"
 	d8updater "github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
 )
@@ -163,7 +162,13 @@ func updateDeckhouse(input *go_hook.HookInput, dc dependency.Container) error {
 	}
 
 	// fetch releases from snapshot and patch initial statuses
-	deckhouseUpdater.FetchAndPrepareReleases(input.Snapshots["releases"])
+	releases := make([]*d8updater.DeckhouseRelease, 0, len(snap))
+	for _, rl := range input.Snapshots["releases"] {
+		releases = append(releases, rl.(*d8updater.DeckhouseRelease))
+	}
+
+	// fetch releases from snapshot and patch initial statuses
+	deckhouseUpdater.PrepareReleases(releases)
 	if deckhouseUpdater.ReleasesCount() == 0 {
 		return nil
 	}

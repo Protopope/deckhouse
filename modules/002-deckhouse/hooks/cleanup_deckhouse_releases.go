@@ -20,13 +20,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/deckhouse/deckhouse/go_lib/updater"
-
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
 	"github.com/flant/addon-operator/sdk"
 	"github.com/flant/shell-operator/pkg/kube/object_patch"
 	"k8s.io/utils/pointer"
 
+	"github.com/deckhouse/deckhouse/go_lib/updater"
 	"github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/apis/v1alpha1"
 	d8updater "github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
 )

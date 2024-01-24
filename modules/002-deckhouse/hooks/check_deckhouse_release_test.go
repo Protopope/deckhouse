@@ -26,9 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deckhouse/deckhouse/go_lib/updater"
-	d8updater "github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
-
 	"github.com/Masterminds/semver/v3"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/fake"
@@ -39,6 +36,8 @@ import (
 
 	"github.com/deckhouse/deckhouse/go_lib/dependency"
 	"github.com/deckhouse/deckhouse/go_lib/dependency/cr"
+	"github.com/deckhouse/deckhouse/go_lib/updater"
+	d8updater "github.com/deckhouse/deckhouse/modules/002-deckhouse/hooks/internal/updater"
 	. "github.com/deckhouse/deckhouse/testing/hooks"
 )
 
