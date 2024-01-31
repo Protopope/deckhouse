@@ -144,7 +144,7 @@ func updateDeckhouse(input *go_hook.HookInput, dc dependency.Container) error {
 	approvalMode := input.Values.Get("deckhouse.update.mode").String()
 	// if values key does not exist, then cluster is just bootstrapping
 	clusterBootstrapping := !input.Values.Exists("global.clusterIsBootstrapped")
-	deckhouseUpdater, err := updater.NewDeckhouseUpdater(input, approvalMode, releaseData, deckhousePod.Ready, clusterBootstrapping)
+	deckhouseUpdater, err := d8updater.NewDeckhouseUpdater(input, approvalMode, releaseData, deckhousePod.Ready, clusterBootstrapping)
 	if err != nil {
 		return fmt.Errorf("initializing deckhouse updater: %v", err)
 	}
