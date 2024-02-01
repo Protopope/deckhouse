@@ -505,6 +505,8 @@ func (c *Controller) reconcilePendingRelease(ctx context.Context, mr *v1alpha1.M
 	if err != nil {
 		return ctrl.Result{Requeue: true}, fmt.Errorf("parse notification config: %w", err)
 	}
+
+	c.logger.Debugf("%+v", nConfig) // TODO: remove this
 	kubeAPI := newKubeAPI(c.logger, c.d8ClientSet, c.moduleSourcesLister, c.externalModulesDir, c.symlinksDir, c.modulesValidator)
 	releaseUpdater := newUpdater(c.logger, nConfig, kubeAPI)
 
@@ -564,6 +566,12 @@ func (c *Controller) reconcilePendingRelease(ctx context.Context, mr *v1alpha1.M
 			if !releaseUpdater.ApplyPredictedRelease(nil) {
 				return ctrl.Result{RequeueAfter: defaultCheckInterval}, nil
 			}
+
+			err = releaseUpdater.ChangeUpdatingFlag(false)
+			if err != nil {
+				return ctrl.Result{Requeue: true}, fmt.Errorf("change updating flag: %w", err)
+			}
+
 			return ctrl.Result{}, nil
 		}
 
@@ -574,6 +582,11 @@ func (c *Controller) reconcilePendingRelease(ctx context.Context, mr *v1alpha1.M
 
 		if !releaseUpdater.ApplyPredictedRelease(windows) {
 			return ctrl.Result{RequeueAfter: defaultCheckInterval}, nil
+		}
+
+		err = releaseUpdater.ChangeUpdatingFlag(false)
+		if err != nil {
+			return ctrl.Result{Requeue: true}, fmt.Errorf("change updating flag: %w", err)
 		}
 
 		modulesChangedReason = "a new module release found"
