@@ -60,7 +60,7 @@ func (dml *DeckhouseController) LoadModule(moduleSource, modulePath string) (*mo
 	}
 
 	dml.deckhouseModules[def.Name] = dm
-	dml.sourceModules[def.Name] = moduleSource
+	dml.sourceModules.SetSource(def.Name, moduleSource)
 	return dm.GetBasicModule(), nil
 }
 

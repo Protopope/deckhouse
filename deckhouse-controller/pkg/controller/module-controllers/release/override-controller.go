@@ -40,6 +40,7 @@ import (
 	d8listers "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/client/listers/deckhouse.io/v1alpha1"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/downloader"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/utils"
+	sm "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/source_modules"
 	deckhouseconfig "github.com/deckhouse/deckhouse/go_lib/deckhouse-config"
 )
 
@@ -64,6 +65,7 @@ type ModulePullOverrideController struct {
 	modulesValidator   moduleValidator
 	externalModulesDir string
 	symlinksDir        string
+	sourceModules      *sm.SourceModules
 }
 
 // NewModulePullOverrideController returns a new sample controller
@@ -72,6 +74,7 @@ func NewModulePullOverrideController(ks kubernetes.Interface,
 	moduleSourceInformer d8informers.ModuleSourceInformer,
 	modulePullOverridesInformer d8informers.ModulePullOverrideInformer,
 	modulesValidator moduleValidator,
+	sourceModules *sm.SourceModules,
 ) *ModulePullOverrideController {
 	ratelimiter := workqueue.NewMaxOfRateLimiter(
 		workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 1000*time.Second),
@@ -91,6 +94,8 @@ func NewModulePullOverrideController(ks kubernetes.Interface,
 		workqueue: workqueue.NewRateLimitingQueue(ratelimiter),
 
 		logger: lg,
+
+		sourceModules: sourceModules,
 
 		modulesValidator:   modulesValidator,
 		externalModulesDir: os.Getenv("EXTERNAL_MODULES_DIR"),
@@ -132,8 +137,7 @@ func (c *ModulePullOverrideController) Run(ctx context.Context, workers int) {
 	// Check if controller's dependencies have been initialized
 	_ = wait.PollUntilContextCancel(ctx, utils.SyncedPollPeriod, false,
 		func(context.Context) (bool, error) {
-			// TODO: add modulemanager initialization check c.modulesValidator.AreModulesInited() (required for reloading modules without restarting deckhouse)
-			return deckhouseconfig.IsServiceInited(), nil
+			return deckhouseconfig.IsServiceInited() && c.modulesValidator.AreModulesInited(), nil
 		})
 
 	// Start the informer factories to begin populating the informer caches
@@ -259,6 +263,8 @@ func (c *ModulePullOverrideController) moduleOverrideReconcile(ctx context.Conte
 		return ctrl.Result{Requeue: true}, err
 	}
 
+	c.sourceModules.SetSource(mo.Name, mo.Spec.Source)
+
 	md := downloader.NewModuleDownloader(c.externalModulesDir, ms, utils.GenerateRegistryOptions(ms))
 	newChecksum, moduleDef, err := md.DownloadDevImageTag(mo.Name, mo.Spec.ImageTag, mo.Status.ImageDigest)
 	if err != nil {
@@ -317,10 +323,10 @@ func (c *ModulePullOverrideController) moduleOverrideReconcile(ctx context.Conte
 		_, _ = c.d8ClientSet.DeckhouseV1alpha1().ModulePullOverrides().Update(ctx, mo, metav1.UpdateOptions{})
 	}
 
-	// reload module
+	// register/reload module
 	err = c.modulesValidator.RegisterModule(mo.Spec.Source, symlinkPath)
 	if err != nil {
-		c.logger.Errorf("Module %q reload failed: %v", mo.Name, err)
+		c.logger.Errorf("Module %q registration/reload failed: %v", mo.Name, err)
 		return ctrl.Result{Requeue: true}, err
 	}
 	c.logger.Infof("Module %s was reloaded because its ModulePullOverride image was updated", mo.Name)

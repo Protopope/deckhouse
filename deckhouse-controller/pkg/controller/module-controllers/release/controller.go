@@ -56,6 +56,7 @@ import (
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/models"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/downloader"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/utils"
+	sm "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/source_modules"
 	deckhouseconfig "github.com/deckhouse/deckhouse/go_lib/deckhouse-config"
 	d8http "github.com/deckhouse/deckhouse/go_lib/dependency/http"
 	docs_builder "github.com/deckhouse/deckhouse/go_lib/module/docs-builder"
@@ -94,7 +95,7 @@ type Controller struct {
 	logger logger.Logger
 
 	// <module-name>: <module-source>
-	sourceModules map[string]string
+	sourceModules *sm.SourceModules
 
 	modulesValidator   moduleValidator
 	externalModulesDir string
@@ -129,6 +130,7 @@ func NewController(ks kubernetes.Interface,
 	mv moduleValidator,
 	httpClient d8http.Client,
 	metricStorage *metric_storage.MetricStorage,
+	sourceModules *sm.SourceModules,
 ) *Controller {
 	ratelimiter := workqueue.NewMaxOfRateLimiter(
 		workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 1000*time.Second),
@@ -168,7 +170,7 @@ func NewController(ks kubernetes.Interface,
 		leaseWorkqueue:             workqueue.NewRateLimitingQueue(ratelimiter),
 		logger:                     lg,
 
-		sourceModules: make(map[string]string),
+		sourceModules: sourceModules,
 
 		modulesValidator:   mv,
 		externalModulesDir: os.Getenv("EXTERNAL_MODULES_DIR"),
@@ -272,8 +274,7 @@ func (c *Controller) Run(ctx context.Context, workers int) {
 	// Check if controller's dependencies have been initialized
 	_ = wait.PollUntilContextCancel(ctx, utils.SyncedPollPeriod, false,
 		func(context.Context) (bool, error) {
-			// TODO: add modulemanager initialization check c.modulesValidator.AreModulesInited() (required for reloading modules without restarting deckhouse)
-			return deckhouseconfig.IsServiceInited(), nil
+			return deckhouseconfig.IsServiceInited() && c.modulesValidator.AreModulesInited(), nil
 		})
 
 	// Start the informer factories to begin populating the informer caches
@@ -512,7 +513,7 @@ func (c *Controller) reconcilePendingRelease(ctx context.Context, mr *v1alpha1.M
 		// latest release deployed
 		deployedRelease := pred.releases[pred.currentReleaseIndex]
 		deckhouseconfig.Service().AddModuleNameToSource(deployedRelease.Spec.ModuleName, deployedRelease.GetModuleSource())
-		c.sourceModules[deployedRelease.Spec.ModuleName] = deployedRelease.GetModuleSource()
+		c.sourceModules.SetSource(deployedRelease.Spec.ModuleName, deployedRelease.GetModuleSource())
 
 		// check symlink exists on FS, relative symlink
 		modulePath := generateModulePath(moduleName, deployedRelease.Spec.Version.String())
@@ -900,23 +901,24 @@ func (c *Controller) deleteModulesWithAbsentRelease() error {
 	c.logger.Debugf("%d ModuleReleases found", len(releases))
 
 	for _, release := range releases {
-		c.sourceModules[release.Spec.ModuleName] = release.GetModuleSource()
+		c.sourceModules.SetSource(release.Spec.ModuleName, release.GetModuleSource())
 		delete(fsModulesLinks, release.Spec.ModuleName)
 	}
 
 	for module, moduleLinkPath := range fsModulesLinks {
-		_, err = c.modulePullOverridesLister.Get(module)
-		if err != nil && apierrors.IsNotFound(err) {
-			c.logger.Warnf("Module %q has neither ModuleRelease nor ModuleOverride. Purging from FS", module)
-			_ = os.RemoveAll(moduleLinkPath)
+		mpo, err := c.modulePullOverridesLister.Get(module)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				c.logger.Warnf("Module %q has neither ModuleRelease nor ModuleOverride. Purging from FS", module)
+				_ = os.RemoveAll(moduleLinkPath)
+				continue
+			}
+			return fmt.Errorf("fetch ModulePullOverrides failed: %w", err)
 		}
+		c.sourceModules.SetSource(module, mpo.Spec.Source)
 	}
 
 	return nil
-}
-
-func (c *Controller) GetModuleSources() map[string]string {
-	return c.sourceModules
 }
 
 func (c *Controller) readModulesFromFS(dir string) (map[string]string, error) {
@@ -1174,6 +1176,8 @@ type moduleValidator interface {
 	GetValuesValidator() *validation.ValuesValidator
 	DisableModuleHooks(moduleName string)
 	GetModule(moduleName string) *addonmodules.BasicModule
+	RegisterModule(s, p string) error
+	AreModulesInited() bool
 }
 
 func (c *Controller) sendDocumentation(ctx context.Context, mr *v1alpha1.ModuleRelease) error {
