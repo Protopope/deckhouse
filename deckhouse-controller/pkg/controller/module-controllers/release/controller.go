@@ -413,8 +413,8 @@ func (c *Controller) createOrUpdateReconcile(ctx context.Context, roMR *v1alpha1
 	case "":
 		mr.Status.Phase = v1alpha1.PhasePending
 		mr.Status.TransitionTime = metav1.NewTime(time.Now().UTC())
-		if e := c.updateModuleReleaseStatus(ctx, mr); e != nil {
-			return ctrl.Result{Requeue: true}, e
+		if err := c.updateModuleReleaseStatus(ctx, mr); err != nil {
+			return ctrl.Result{Requeue: true}, err
 		}
 
 		return ctrl.Result{}, nil
@@ -518,7 +518,7 @@ func (c *Controller) reconcilePendingRelease(ctx context.Context, mr *v1alpha1.M
 		modulePath := generateModulePath(moduleName, deployedRelease.Spec.Version.String())
 		if !isModuleExistsOnFS(c.symlinksDir, currentModuleSymlink, modulePath) {
 			newModuleSymlink := path.Join(c.symlinksDir, fmt.Sprintf("%d-%s", deployedRelease.Spec.Weight, moduleName))
-			c.logger.Debugf("Module %q is not exists on the filesystem. Restoring", moduleName)
+			c.logger.Debugf("Module %q doesn't exist on the filesystem. Restoring", moduleName)
 			err = enableModule(c.externalModulesDir, currentModuleSymlink, newModuleSymlink, modulePath)
 			if err != nil {
 				c.logger.Errorf("Module restore failed: %v", err)

@@ -20,7 +20,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/flant/addon-operator/pkg/utils/logger"
@@ -305,29 +304,26 @@ func (c *ModulePullOverrideController) moduleOverrideReconcile(ctx context.Conte
 
 		return ctrl.Result{Requeue: true}, err
 	}
-	// disable target module hooks so as not to invoke them before restart
-	if c.modulesValidator.GetModule(mo.Name) != nil {
-		c.modulesValidator.DisableModuleHooks(mo.Name)
-	}
-	defer func() {
-		c.logger.Infof("Restarting Deckhouse because %q ModulePullOverride image was updated", mo.Name)
-		err := syscall.Kill(1, syscall.SIGUSR2)
-		if err != nil {
-			c.logger.Fatalf("Send SIGUSR2 signal failed: %s", err)
-		}
-	}()
 
 	mo.Status.Message = ""
 	mo.Status.ImageDigest = newChecksum
 
-	if e := c.updateModulePullOverrideStatus(ctx, mo); e != nil {
-		return ctrl.Result{Requeue: true}, e
+	if err := c.updateModulePullOverrideStatus(ctx, mo); err != nil {
+		return ctrl.Result{Requeue: true}, err
 	}
 
 	if _, ok := mo.Labels["renew"]; ok {
 		delete(mo.Labels, "renew")
 		_, _ = c.d8ClientSet.DeckhouseV1alpha1().ModulePullOverrides().Update(ctx, mo, metav1.UpdateOptions{})
 	}
+
+	// reload module
+	err = c.modulesValidator.RegisterModule(mo.Spec.Source, symlinkPath)
+	if err != nil {
+		c.logger.Errorf("Module %q reload failed: %v", mo.Name, err)
+		return ctrl.Result{Requeue: true}, err
+	}
+	c.logger.Infof("Module %s was reloaded because its ModulePullOverride image was updated", mo.Name)
 
 	return ctrl.Result{RequeueAfter: mo.Spec.ScanInterval.Duration}, nil
 }

@@ -38,6 +38,7 @@ import (
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/models"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/release"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/source"
+	d8config "github.com/deckhouse/deckhouse/go_lib/deckhouse-config"
 	d8http "github.com/deckhouse/deckhouse/go_lib/dependency/http"
 )
 
@@ -144,7 +145,7 @@ func (dml *DeckhouseController) runEventLoop(ec chan events.ModuleEvent) {
 		}
 		switch event.EventType {
 		case events.ModuleRegistered:
-			err := dml.handleModuleRegistration(mod)
+			err := dml.handleModuleRegistration(mod, event.RegisterWithoutReload)
 			if err != nil {
 				log.Errorf("Error occurred during the module %q registration: %s", mod.GetBasicModule().GetName(), err)
 				continue
@@ -181,13 +182,61 @@ func (dml *DeckhouseController) handleModulePurge(m *models.DeckhouseModule) err
 	})
 }
 
-func (dml *DeckhouseController) handleModuleRegistration(m *models.DeckhouseModule) error {
+func (dml *DeckhouseController) handleModuleRegistration(m *models.DeckhouseModule, registerWithoutReload bool) error {
 	return retry.OnError(retry.DefaultRetry, errors.IsServiceUnavailable, func() error {
 		src := dml.sourceModules[m.GetBasicModule().GetName()]
 		newModule := m.AsKubeObject(src)
+		moduleName := newModule.GetName()
 		newModule.SetLabels(map[string]string{epochLabelKey: epochLabelValue})
 
-		existModule, err := dml.kubeClient.DeckhouseV1alpha1().Modules().Get(dml.ctx, newModule.GetName(), v1.GetOptions{})
+		// if we have to reregister an existing module
+		if registerWithoutReload {
+			// check if ModuleConfig exists
+			mc, err := dml.kubeClient.DeckhouseV1alpha1().ModuleConfigs().Get(dml.ctx, moduleName, v1.GetOptions{})
+			if err != nil && !errors.IsNotFound(err) {
+				return err
+			}
+
+			// if ModuleConfig was found
+			if err == nil {
+				// if ModuleConfig has enabled set to true
+				if mc.Spec.Enabled != nil && *mc.Spec.Enabled {
+					newModule.Properties.State = "Enabled"
+					// run enable scripts
+					basicModule := m.GetBasicModule()
+					if basicModule == nil {
+						return fmt.Errorf("Couldn't get basic module for  %s", moduleName)
+					}
+
+					// run enabled script to check if module should be enabled
+					isEnabled, err := basicModule.RunEnabledScript(dml.mm.TempDir, dml.mm.GetEnabledModuleNames(), map[string]string{})
+					if err != nil {
+						return fmt.Errorf("Enable script for %s failed", moduleName)
+					}
+
+					// if module is enabled - update moduleManager states
+					if isEnabled {
+						if !dml.mm.IsModuleEnabled(moduleName) {
+							dml.mm.AddEnabledModuleName(moduleName)
+							dml.mm.AddEnabledModuleByConfigName(moduleName)
+						}
+						// enqueue module startup sequence
+						err := dml.mm.PushRunModule(moduleName)
+						if err != nil {
+							return err
+						}
+					} else {
+						// mark modules as disabled
+						newModule.Properties.State = "Disabled"
+					}
+				}
+			}
+			// make sure d8 config state is updated
+			d8config.Service().AddModuleNameToSource(moduleName, newModule.Properties.Source)
+			d8config.Service().AddPossibleName(moduleName)
+		}
+
+		existModule, err := dml.kubeClient.DeckhouseV1alpha1().Modules().Get(dml.ctx, moduleName, v1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				_, err = dml.kubeClient.DeckhouseV1alpha1().Modules().Create(dml.ctx, newModule, v1.CreateOptions{})
