@@ -56,7 +56,7 @@ func NewOIDCProvider(apiURL, login, password string, scopes, allowedGroups []str
 		},
 	}
 
-	groups := make(map[string]struct{})
+	groups := make(map[string]struct{}, len(allowedGroups))
 	for _, group := range allowedGroups {
 		groups[group] = struct{}{}
 	}

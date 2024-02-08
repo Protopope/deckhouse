@@ -134,7 +134,7 @@ type CrowdProvider struct {
 }
 
 func (c *CrowdProvider) ValidateCredentials(login, password string) ([]string, error) {
-	_, err := c.client.MakeRequest("/session", "POST", struct {
+	_, err := c.client.MakeRequest("/session", http.MethodPost, struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}{Username: login, Password: password})
@@ -142,7 +142,7 @@ func (c *CrowdProvider) ValidateCredentials(login, password string) ([]string, e
 		return nil, err
 	}
 
-	body, err := c.client.MakeRequest("/user/group/nested?username="+login, "GET", nil)
+	body, err := c.client.MakeRequest("/user/group/nested?username="+login, http.MethodGet, nil)
 	if err != nil {
 		return nil, err
 	}
