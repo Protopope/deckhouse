@@ -20,28 +20,56 @@ apiVersions:
         kind: DVPClusterConfiguration
         layout: Standard
         sshPublicKey: "<SSH_PUBLIC_KEY>"
+        zones:
+        - zone-a
+        - zone-b
+        - zone-c
+        region: r1
         masterNodeGroup:
           replicas: 1
+          zones:
+          - zone-a
+          - zone-b
+          - zone-c
           instanceClass:
             virtualMachine:
               cpu:
                 cores: 1
+                coreFraction: 100%
               memory:
                 size: 4Gi
+              additionalLabels:
+                test-label1: value1
+              additionalAnnotations:
+                test-annotation1: value2
+              tolerations:
+              - key: "key1"
+                operator: "Equal"
+                value: "value1"
+                effect: "NoSchedule"
+              nodeSelector:
+                subzone: subzone-1
             rootDisk:
               size: 10Gi
+              storageClassName: sc1
               image:
                 type: ClusterVirtualMachineImage
                 name: ubuntu
             etcDisk:
               size: 10Gi
+              storageClassName: sc1
         nodeGroups:
           - name: worker
+            zones:
+            - zone-a
+            - zone-b
+            - zone-c
             replicas: 1
             instanceClass:
               virtualMachine:
                 cpu:
                   cores: 4
+                  coreFraction: 100%
                 memory:
                   size: 8Gi
               rootDisk:
@@ -80,18 +108,16 @@ apiVersions:
             type: integer
             minimum: 1
 
-          # zones:
-          #   description: |
-          #     A limited set of zones in which nodes can be created.
-          #   x-doc-required: false
-          #   type: array
-          #   items:
-          #     enum:
-          #     - ru-central1-a
-          #     - ru-central1-b
-          #     - ru-central1-c
-          #     - ru-central1-d
-          #   uniqueItems: true
+          zones:
+            type: array
+            description: |
+              A limited set of zones in which nodes can be created.
+            items:
+              enum:
+              - zone-a
+              - zone-b
+              - zone-c
+            uniqueItems: true
 
           instanceClass:
             type: object
@@ -162,6 +188,48 @@ apiVersions:
                     additionalProperties:
                       type: string
 
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: |
+                      Allows VM to be assigned to specified DVP nodes.
+
+                      [The same](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes//) as in the pods `spec.nodeSelector` parameter in Kubernetes;
+                    type: object
+
+                  priorityClassName:
+                      description: |
+                        TODO: А нада?
+
+                        [The same](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/)  as in the pods `spec.priorityClassName` parameter in Kubernetes;
+                      type: string
+
+                  tolerations:
+                    type: array
+                    description: |
+                      Allows you to set tolerations for VM for a DVP node.
+
+                      [The same](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) as in the pods `spec.tolerations` parameter in Kubernetes;
+                    items:
+                      type: object
+                      description: ""
+                      properties:
+                        effect:
+                          type: string
+                          description: ""
+                        key:
+                          type: string
+                          description: ""
+                        operator:
+                          type: string
+                          description: ""
+                        tolerationSeconds:
+                          type: integer
+                          description: ""
+                          format: int64
+                        value:
+                          type: string
+                          description: ""
 
               rootDisk: &instanceClassRootDisk
                 type: object
@@ -245,17 +313,16 @@ apiVersions:
                 The number of nodes to create.
               type: integer
 
-            # zones:
-            #   type: array
-            #   description: |
-            #     A limited set of zones in which nodes can be created.
-            #   items:
-            #     enum:
-            #     - ru-central1-a
-            #     - ru-central1-b
-            #     - ru-central1-c
-            #     - ru-central1-d
-            #   uniqueItems: true
+            zones:
+              type: array
+              description: |
+                A limited set of zones in which nodes can be created.
+              items:
+                enum:
+                - zone-a
+                - zone-b
+                - zone-c
+              uniqueItems: true
 
             nodeTemplate:
               description: |
@@ -330,10 +397,26 @@ apiVersions:
           Read [more](https://deckhouse.io/documentation/v1/modules/030-cloud-provider-yandex/layouts.html) about possible provider layouts.
         enum: [Standard]
 
+      region:
+        type: string
+        description: |
+          The name of region.
+
+      zones:
+        type: array
+        description: |
+          A limited set of zones in which nodes can be created.
+        items:
+          enum:
+          - zone-a
+          - zone-b
+          - zone-c
+        uniqueItems: true
+
       provider:
         type: object
         description: |
-          TODO: Contains settings to connect to the Deckhouse Kubernets Platform API.
+          Contains settings to connect to the Deckhouse Kubernets Platform API.
         additionalProperties: false
         properties:
           kubeconfigBase64:
@@ -342,15 +425,3 @@ apiVersions:
             type: string
         required:
         - kubeconfigBase64
-
-      # zones:
-      #   type: array
-      #   description: |
-      #     The globally restricted set of zones that this cloud provider works with.
-      #   items:
-      #     enum:
-      #       - ru-central1-a
-      #       - ru-central1-b
-      #       - ru-central1-c
-      #       - ru-central1-d
-      #   uniqueItems: true
