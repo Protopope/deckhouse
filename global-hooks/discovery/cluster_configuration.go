@@ -32,7 +32,7 @@ import (
 
 type ClusterConfigurationYaml struct {
 	Content                              []byte
-	maxUsedControlPlaneKubernetesVersion string
+	MaxUsedControlPlaneKubernetesVersion string
 }
 
 func applyClusterConfigurationYamlFilter(obj *unstructured.Unstructured) (go_hook.FilterResult, error) {
@@ -52,9 +52,9 @@ func applyClusterConfigurationYamlFilter(obj *unstructured.Unstructured) (go_hoo
 	cc.Content = ccYaml
 	raw, ok := secret.Data["maxUsedControlPlaneKubernetesVersion"]
 	if !ok {
-		cc.maxUsedControlPlaneKubernetesVersion = ""
+		cc.MaxUsedControlPlaneKubernetesVersion = ""
 	} else {
-		cc.maxUsedControlPlaneKubernetesVersion = string(raw)
+		cc.MaxUsedControlPlaneKubernetesVersion = string(raw)
 	}
 
 	return cc, err
@@ -99,7 +99,7 @@ func clusterConfiguration(input *go_hook.HookInput) error {
 		}
 
 		if kubernetesVersionFromMetaConfig == "Automatic" {
-			metaConfig.ClusterConfig["kubernetesVersion"], err = newAutomaticVersion(configYamlBytes.maxUsedControlPlaneKubernetesVersion)
+			metaConfig.ClusterConfig["kubernetesVersion"], err = newAutomaticVersion(configYamlBytes.MaxUsedControlPlaneKubernetesVersion, config.DefaultKubernetesVersion)
 		}
 		if err != nil {
 			return err
@@ -179,15 +179,15 @@ func rawMessageToString(message json.RawMessage) (string, error) {
 	return result, err
 }
 
-func newAutomaticVersion(maxUsedControlPlaneKubernetesVersion string) ([]byte, error) {
-	defaultKubernetesVersion, err := semver.NewVersion(config.DefaultKubernetesVersion)
+func newAutomaticVersion(maxUsedControlPlaneKubernetesVersion string, configDefaultKubernetesVersion string) ([]byte, error) {
+	defaultKubernetesVersion, err := semver.NewVersion(configDefaultKubernetesVersion)
 	if err != nil {
 		return nil, err
 	}
 	maxUsedKubernetesVersion, err := semver.NewVersion(maxUsedControlPlaneKubernetesVersion)
 	// Cant parse max used kubenetes version or maxUsedKubernetesVersion equal nil
 	if err != nil || maxUsedKubernetesVersion == nil {
-		return json.Marshal(config.DefaultKubernetesVersion)
+		return json.Marshal(configDefaultKubernetesVersion)
 	}
 	finalKubernetesVersion := defaultKubernetesVersion
 
