@@ -20,6 +20,7 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
 	"github.com/flant/addon-operator/sdk"
 	"github.com/flant/shell-operator/pkg/kube_events_manager/types"
@@ -30,7 +31,8 @@ import (
 )
 
 type ClusterConfigurationYaml struct {
-	Content []byte
+	Content                              []byte
+	maxUsedControlPlaneKubernetesVersion string
 }
 
 func applyClusterConfigurationYamlFilter(obj *unstructured.Unstructured) (go_hook.FilterResult, error) {
@@ -48,6 +50,12 @@ func applyClusterConfigurationYamlFilter(obj *unstructured.Unstructured) (go_hoo
 	}
 
 	cc.Content = ccYaml
+	raw, ok := secret.Data["maxUsedControlPlaneKubernetesVersion"]
+	if !ok {
+		cc.maxUsedControlPlaneKubernetesVersion = ""
+	} else {
+		cc.maxUsedControlPlaneKubernetesVersion = string(raw)
+	}
 
 	return cc, err
 }
@@ -91,8 +99,7 @@ func clusterConfiguration(input *go_hook.HookInput) error {
 		}
 
 		if kubernetesVersionFromMetaConfig == "Automatic" {
-			b, _ := json.Marshal(config.DefaultKubernetesVersion)
-			metaConfig.ClusterConfig["kubernetesVersion"] = b
+			metaConfig.ClusterConfig["kubernetesVersion"], err = newAutomaticVersion(configYamlBytes.maxUsedControlPlaneKubernetesVersion)
 		}
 
 		input.Values.Set("global.clusterConfiguration", metaConfig.ClusterConfig)
@@ -167,4 +174,24 @@ func rawMessageToString(message json.RawMessage) (string, error) {
 	}
 	err = json.Unmarshal(b, &result)
 	return result, err
+}
+
+func newAutomaticVersion(maxUsedControlPlaneKubernetesVersion string) ([]byte, error) {
+	defaultKubernetesVersion, err := semver.NewVersion(config.DefaultKubernetesVersion)
+	if err != nil {
+		return nil, err
+	}
+	maxUsedKubernetesVersion, err := semver.NewVersion(maxUsedControlPlaneKubernetesVersion)
+	// Cant parse max used kubenetes version or maxUsedKubernetesVersion equal nil
+	if err != nil || maxUsedKubernetesVersion == nil {
+		return json.Marshal(config.DefaultKubernetesVersion)
+	}
+	finaKubernetesVersion := defaultKubernetesVersion
+
+	// Default version will downgrdae kluster more than 1 version
+	// kubernetes version cannot be downgraded more than 1 version: maxUsedKubeVersion=%s, newKubeVersion=%s
+	if (maxUsedKubernetesVersion.Minor() - defaultKubernetesVersion.Minor()) > 1 {
+		finaKubernetesVersion = maxUsedKubernetesVersion
+	}
+	return json.Marshal(fmt.Sprintf("%d.%d", finaKubernetesVersion.Major(), finaKubernetesVersion.Minor()))
 }
