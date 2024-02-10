@@ -95,7 +95,6 @@ metadata:
   name: d8-cluster-configuration
   namespace: kube-system
 data:
-  maxUsedControlPlaneKubernetesVersion: 1.26
   "cluster-configuration.yaml": ` + base64.StdEncoding.EncodeToString([]byte(stateCClusterConfiguration))
 
 		stateDClusterConfiguration = `
@@ -103,8 +102,8 @@ apiVersion: deckhouse.io/v1
 kind: ClusterConfiguration
 clusterType: Cloud
 cloud:
-provider: AWS
-prefix: lube
+  provider: AWS
+  prefix: lube
 podSubnetCIDR: 10.122.0.0/16
 podSubnetNodeCIDRPrefix: "26"
 serviceSubnetCIDR: 10.213.0.0/16
@@ -115,11 +114,11 @@ clusterDomain: "test.local"
 apiVersion: v1
 kind: Secret
 metadata:
-name: d8-cluster-configuration
-namespace: kube-system
+  name: d8-cluster-configuration
+  namespace: kube-system
 data:
-maxUsedControlPlaneKubernetesVersion: 1.26
-"cluster-configuration.yaml": ` + base64.StdEncoding.EncodeToString([]byte(stateDClusterConfiguration))
+  maxUsedControlPlaneKubernetesVersion: 1.26
+  "cluster-configuration.yaml": ` + base64.StdEncoding.EncodeToString([]byte(stateDClusterConfiguration))
 	)
 
 	f := HookExecutionConfigInit(initValuesString, initConfigValuesString)
