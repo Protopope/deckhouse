@@ -89,11 +89,14 @@ function __main__() {
     fi
 
     # Not allow to downgrade more than 1 kube version
-    maxUsedControlPlaneKubernetesVersion=$(context::jq -r '.review.request.object.data."maxUsedControlPlaneKubernetesVersion"' | base64 -d)
     newKubernetesVersion=$(yq eval '.kubernetesVersion' - <<< "$newConfig")
-    if [ $((${maxUsedControlPlaneKubernetesVersion:2} - ${newKubernetesVersion:2})) -gt 1 ]; then
-      echo '{"allowed":false, "message":"can not downgrade kubernetes version more than 1 version. maxUsedControlPlaneKubernetesVersion='"${maxUsedControlPlaneKubernetesVersion}"" newKubernetesVersion=${newKubernetesVersion}"'"}' > "$VALIDATING_RESPONSE_PATH"
-      return 0
+    # Possible kubernetes versions are "Automatic" and semver(1.28) versions
+    if [ "${kubernetes}" != "Automatic" ]; then
+      maxUsedControlPlaneKubernetesVersion=$(context::jq -r '.review.request.object.data."maxUsedControlPlaneKubernetesVersion"' | base64 -d)
+      if [ $((${maxUsedControlPlaneKubernetesVersion:2} - ${newKubernetesVersion:2})) -gt 1 ]; then
+        echo '{"allowed":false, "message":"can not downgrade kubernetes version more than 1 version. maxUsedControlPlaneKubernetesVersion='"${maxUsedControlPlaneKubernetesVersion}"" newKubernetesVersion=${newKubernetesVersion}"'"}' > "$VALIDATING_RESPONSE_PATH"
+        return 0
+      fi
     fi
 
     # defaultCRI cannot be changed if count of endpoints < 3
