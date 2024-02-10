@@ -95,7 +95,31 @@ metadata:
   name: d8-cluster-configuration
   namespace: kube-system
 data:
+  maxUsedControlPlaneKubernetesVersion: 1.26
   "cluster-configuration.yaml": ` + base64.StdEncoding.EncodeToString([]byte(stateCClusterConfiguration))
+
+		stateDClusterConfiguration = `
+apiVersion: deckhouse.io/v1
+kind: ClusterConfiguration
+clusterType: Cloud
+cloud:
+provider: AWS
+prefix: lube
+podSubnetCIDR: 10.122.0.0/16
+podSubnetNodeCIDRPrefix: "26"
+serviceSubnetCIDR: 10.213.0.0/16
+kubernetesVersion: "Automatic"
+clusterDomain: "test.local"
+`
+		stateD = `
+apiVersion: v1
+kind: Secret
+metadata:
+name: d8-cluster-configuration
+namespace: kube-system
+data:
+maxUsedControlPlaneKubernetesVersion: 1.26
+"cluster-configuration.yaml": ` + base64.StdEncoding.EncodeToString([]byte(stateDClusterConfiguration))
 	)
 
 	f := HookExecutionConfigInit(initValuesString, initConfigValuesString)
@@ -198,6 +222,35 @@ data:
 			Expect(f.ValuesGet("global.clusterConfiguration.podSubnetNodeCIDRPrefix").String()).To(Equal("26"))
 			Expect(f.ValuesGet("global.clusterConfiguration.serviceSubnetCIDR").String()).To(Equal("10.213.0.0/16"))
 			Expect(f.ValuesGet("global.clusterConfiguration.kubernetesVersion").String()).To(Equal("1.25"))
+
+			Expect(f.ValuesGet("global.discovery.podSubnet").String()).To(Equal("10.122.0.0/16"))
+			Expect(f.ValuesGet("global.discovery.serviceSubnet").String()).To(Equal("10.213.0.0/16"))
+			Expect(f.ValuesGet("global.discovery.clusterDomain").String()).To(Equal("test.local"))
+
+			metrics := f.MetricsCollector.CollectedMetrics()
+			Expect(metrics).To(HaveLen(1))
+			value := metrics[0].Value
+			Expect(*value).To(Equal(float64(1024)))
+		})
+
+	})
+
+	Context("Cluster has a d8-cluster-configuration Secret with kubernetesVersion = `Automatic` and maxUsedKubernetesVersion = `1.26`", func() {
+		BeforeEach(func() {
+			f.BindingContexts.Set(f.KubeStateSetAndWaitForBindingContexts(stateD, 1))
+			f.RunHook()
+		})
+
+		It("Should correctly fill the Values store from it", func() {
+			Expect(f).To(ExecuteSuccessfully())
+
+			Expect(f.ValuesGet("global.clusterConfiguration.clusterType").String()).To(Equal("Cloud"))
+			Expect(f.ValuesGet("global.clusterConfiguration.cloud.provider").String()).To(Equal("AWS"))
+			Expect(f.ValuesGet("global.clusterConfiguration.cloud.prefix").String()).To(Equal("lube"))
+			Expect(f.ValuesGet("global.clusterConfiguration.podSubnetCIDR").String()).To(Equal("10.122.0.0/16"))
+			Expect(f.ValuesGet("global.clusterConfiguration.podSubnetNodeCIDRPrefix").String()).To(Equal("26"))
+			Expect(f.ValuesGet("global.clusterConfiguration.serviceSubnetCIDR").String()).To(Equal("10.213.0.0/16"))
+			Expect(f.ValuesGet("global.clusterConfiguration.kubernetesVersion").String()).To(Equal("1.26"))
 
 			Expect(f.ValuesGet("global.discovery.podSubnet").String()).To(Equal("10.122.0.0/16"))
 			Expect(f.ValuesGet("global.discovery.serviceSubnet").String()).To(Equal("10.213.0.0/16"))
