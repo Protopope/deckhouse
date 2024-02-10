@@ -98,9 +98,9 @@ func clusterConfiguration(input *go_hook.HookInput) error {
 
 		if kubernetesVersionFromMetaConfig == "Automatic" {
 			metaConfig.ClusterConfig["kubernetesVersion"], err = newAutomaticVersion(configYamlBytes.MaxUsedControlPlaneKubernetesVersion, config.DefaultKubernetesVersion)
-		}
-		if err != nil {
-			return err
+			if err != nil {
+				return err
+			}
 		}
 
 		input.Values.Set("global.clusterConfiguration", metaConfig.ClusterConfig)
@@ -189,9 +189,9 @@ func newAutomaticVersion(maxUsedControlPlaneKubernetesVersion string, configDefa
 	}
 	finalKubernetesVersion := defaultKubernetesVersion
 
-	// Default version will downgrdae kluster more than 1 version
-	// kubernetes version cannot be downgraded more than 1 version: maxUsedKubeVersion=%s, newKubeVersion=%s
-	if (maxUsedKubernetesVersion.Minor() - defaultKubernetesVersion.Minor()) > 1 {
+	// kubernetes cannot be downgraded more than 1 minor version
+	if (maxUsedKubernetesVersion.Major()-defaultKubernetesVersion.Major()) > 0 ||
+		(maxUsedKubernetesVersion.Minor()-defaultKubernetesVersion.Minor()) > 1 {
 		finalKubernetesVersion = maxUsedKubernetesVersion
 	}
 	return json.Marshal(fmt.Sprintf("%d.%d", finalKubernetesVersion.Major(), finalKubernetesVersion.Minor()))

@@ -88,13 +88,19 @@ function __main__() {
       fi
     fi
 
-    # Not allow to downgrade more than 1 kube version
+    # Not allow to downgrade more than 1 minor kubernetes version
     newKubernetesVersion=$(yq eval '.kubernetesVersion' - <<< "$newConfig")
-    # Possible kubernetes versions are "Automatic" or semver(1.28) versions
+    # Possible kubernetes versions are "Automatic" or semver(1.28)
     if [ "${newKubernetesVersion}" != "Automatic" ]; then
       maxUsedControlPlaneKubernetesVersion=$(context::jq -r '.review.request.object.data."maxUsedControlPlaneKubernetesVersion"' | base64 -d)
-      if [ $((${maxUsedControlPlaneKubernetesVersion:2} - ${newKubernetesVersion:2})) -gt 1 ]; then
-        echo '{"allowed":false, "message":"can not downgrade kubernetes version more than 1 version. maxUsedControlPlaneKubernetesVersion='"${maxUsedControlPlaneKubernetesVersion}"" newKubernetesVersion=${newKubernetesVersion}"'"}' > "$VALIDATING_RESPONSE_PATH"
+      majMaxKubeVersion=$(echo "$maxUsedControlPlaneKubernetesVersion" | cut -d "." -f 1)
+      minMaxKubeVersion=$(echo "$maxUsedControlPlaneKubernetesVersion" | cut -d "." -f 2)
+
+      majNewKubeVersion=$(echo "$newKubernetesVersion" | cut -d "." -f 1)
+      minNewKubeVersion=$(echo "$newKubernetesVersion" | cut -d "." -f 2)
+
+      if [ $(("${majMaxKubeVersion}" - "${majNewKubeVersion}")) -gt 0 ] || [ $(("${minMaxKubeVersion}" - "${minNewKubeVersion}")) -gt 1 ]; then
+        echo '{"allowed":false, "message":"can not downgrade kubernetes version more than 1 minor version. maxUsedControlPlaneKubernetesVersion='"${maxUsedControlPlaneKubernetesVersion}"" newKubernetesVersion=${newKubernetesVersion}"'"}' > "$VALIDATING_RESPONSE_PATH"
         return 0
       fi
     fi
