@@ -51,9 +51,7 @@ func applyClusterConfigurationYamlFilter(obj *unstructured.Unstructured) (go_hoo
 
 	cc.Content = ccYaml
 	raw, ok := secret.Data["maxUsedControlPlaneKubernetesVersion"]
-	if !ok {
-		cc.MaxUsedControlPlaneKubernetesVersion = ""
-	} else {
+	if ok {
 		cc.MaxUsedControlPlaneKubernetesVersion = string(raw)
 	}
 

@@ -117,7 +117,7 @@ metadata:
   name: d8-cluster-configuration
   namespace: kube-system
 data:
-  maxUsedControlPlaneKubernetesVersion: 1.26
+  maxUsedControlPlaneKubernetesVersion: ` + base64.StdEncoding.EncodeToString([]byte("1.26")) + `
   "cluster-configuration.yaml": ` + base64.StdEncoding.EncodeToString([]byte(stateDClusterConfiguration))
 	)
 
