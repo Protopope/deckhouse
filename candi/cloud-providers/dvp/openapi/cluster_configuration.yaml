@@ -25,8 +25,9 @@ apiVersions:
         - zone-b
         - zone-c
         region: r1
+        namespace: # TODO: ???? to provider?
         masterNodeGroup:
-          replicas: 1
+          replicas: 3
           zones:
           - zone-a
           - zone-b
@@ -38,10 +39,16 @@ apiVersions:
                 coreFraction: 100%
               memory:
                 size: 4Gi
+              ipAddresses:
+              - 10.10.10.10
+              - 10.10.10.11
+              - 10.10.10.12
               additionalLabels:
                 test-label1: value1
               additionalAnnotations:
                 test-annotation1: value2
+              topologySpreadConstraints: TODO: ???
+              affinity: TODO: ???
               tolerations:
               - key: "key1"
                 operator: "Equal"
@@ -85,7 +92,7 @@ apiVersions:
     properties:
       apiVersion:
         type: string
-        enum: [deckhouse.io/v1, deckhouse.io/v1alpha1]
+        enum: [deckhouse.io/v1, deckhouse.io/v1alpha1] # TODO а надо?
       kind:
         type: string
         enum: [DVPClusterConfiguration]
@@ -111,7 +118,11 @@ apiVersions:
           zones:
             type: array
             description: |
-              A limited set of zones in which nodes can be created.
+              A set of zones in which nodes can be created.
+              To use this setting, the `topology.kubernetes.io/zone` label must be set on DVP nodes.
+              Read [more](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesioregion) about topological labels.
+
+              > Caution! To set the required label for a DVP node, follow the NodeGroup [documentation](https://deckhouse.io/documentation/v1/modules/040-node-manager/cr.html#nodegroup-v1-spec-nodetemplate-labels).
             items:
               enum:
               - zone-a
@@ -168,11 +179,16 @@ apiVersions:
                           Amount of memory resources allowed for VM.
                         example: 4Gi
 
-                  ipAddress:
-                    type: string
+                  ipAddresses:
+                    type: array
                     description: |
-                      The IP address that will be assigned to the VM. This address must belong to the address range specified in the virtualization module configuration in the virtualMachineCIDRs parameter
-                    pattern: '^([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})$'
+                      Static ip addresses to be assigned to the VM's network interfaces. The number of addresses should correspond to the number of repilicas to be created. Each ip address will be assigned to the corresponding VM instance.
+                      For example: the number of replicas is 3, and we have the following list of ip addresses: ip1, ip2, ip3. As a result, ip1 will be assigned to the first replica, ip2 to the second, and ip3 to the third.
+
+                      > Caution! These addresses must belong to the address range specified in the virtualization module configuration in the virtualMachineCIDRs parameter.
+                    items:
+                      type: string
+                      pattern: '^([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})$'
 
                   additionalLabels:
                     type: object
@@ -196,11 +212,9 @@ apiVersions:
 
                       [The same](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes//) as in the pods `spec.nodeSelector` parameter in Kubernetes;
                     type: object
-
+                  # TODO: А нада?
                   priorityClassName:
                       description: |
-                        TODO: А нада?
-
                         [The same](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/)  as in the pods `spec.priorityClassName` parameter in Kubernetes;
                       type: string
 
@@ -316,7 +330,11 @@ apiVersions:
             zones:
               type: array
               description: |
-                A limited set of zones in which nodes can be created.
+                A set of zones in which nodes can be created.
+                To use this setting, the `topology.kubernetes.io/zone` label must be set on DVP nodes.
+                Read [more](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesioregion) about topological labels.
+
+                > Caution! To set the required label for a DVP node, follow the NodeGroup [documentation](https://deckhouse.io/documentation/v1/modules/040-node-manager/cr.html#nodegroup-v1-spec-nodetemplate-labels).
               items:
                 enum:
                 - zone-a
@@ -401,11 +419,19 @@ apiVersions:
         type: string
         description: |
           The name of region.
+          To use this setting, the `topology.kubernetes.io/region` label must be set on DVP nodes.
+          Read [more](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesioregion) about topological labels.
+
+          > Caution! To set the required label for a DVP node, follow the NodeGroup [documentation](https://deckhouse.io/documentation/v1/modules/040-node-manager/cr.html#nodegroup-v1-spec-nodetemplate-labels).
 
       zones:
         type: array
         description: |
-          A limited set of zones in which nodes can be created.
+          A set of zones in which nodes can be created.
+          To use this setting, the `topology.kubernetes.io/zone` label must be set on DVP nodes.
+          Read [more](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesioregion) about topological labels.
+
+          > Caution! To set the required label for a DVP node, follow the NodeGroup [documentation](https://deckhouse.io/documentation/v1/modules/040-node-manager/cr.html#nodegroup-v1-spec-nodetemplate-labels).
         items:
           enum:
           - zone-a
@@ -416,12 +442,12 @@ apiVersions:
       provider:
         type: object
         description: |
-          Contains settings to connect to the Deckhouse Kubernets Platform API.
+          Contains settings to connect to the Deckhouse Kubernetes Platform API.
         additionalProperties: false
         properties:
           kubeconfigBase64:
             description: |
-              Kubeconfig to connect to Deckhouse Kubernets Platform API base64 encoded.
+              Kubeconfig to connect to Deckhouse Kubernetes Platform API base64 encoded.
             type: string
         required:
         - kubeconfigBase64
