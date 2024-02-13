@@ -1,0 +1,115 @@
+package fsm_test
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/deckhouse/deckhouse/dhctl/pkg/server/fsm"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestFiniteStateMachine(t *testing.T) {
+	t.Parallel()
+
+	type event struct {
+		event       fsm.Event
+		stateBefore fsm.State
+		stateAfter  fsm.State
+		errContains string
+	}
+
+	tests := map[string]struct {
+		initialState fsm.State
+		transitions  []fsm.Transition
+
+		events []event
+	}{
+		"door": {
+			initialState: "closed",
+			transitions: []fsm.Transition{
+				{
+					Event:       "open",
+					Sources:     []fsm.State{"closed"},
+					Destination: "opened",
+					Callback: func(source, destination fsm.State) error {
+						assert.Equal(t, "closed", source)
+						assert.Equal(t, "opened", destination)
+						return nil
+					},
+				},
+				{
+					Event:       "close",
+					Sources:     []fsm.State{"opened"},
+					Destination: "closed",
+					Callback:    nil,
+				},
+				{
+					Event:       "open-slightly",
+					Sources:     []fsm.State{"opened", "closed"},
+					Destination: "slightly-opened",
+					Callback: func(source, destination fsm.State) error {
+						return fmt.Errorf("oh no")
+					},
+				},
+			},
+			events: []event{
+				{
+					event:       "open",
+					stateBefore: "closed",
+					stateAfter:  "opened",
+					errContains: "",
+				},
+				{
+					event:       "open",
+					stateBefore: "opened",
+					stateAfter:  "opened",
+					errContains: "transition error: event \"open\" inappropriate in current state \"opened\"",
+				},
+				{
+					event:       "close",
+					stateBefore: "opened",
+					stateAfter:  "closed",
+					errContains: "",
+				},
+				{
+					event:       "kick",
+					stateBefore: "closed",
+					stateAfter:  "closed",
+					errContains: "transition error: unknown event \"kick\"",
+				},
+				{
+					event:       "open",
+					stateBefore: "closed",
+					stateAfter:  "opened",
+					errContains: "",
+				},
+				{
+					event:       "open-slightly",
+					stateBefore: "opened",
+					stateAfter:  "opened",
+					errContains: "callback error: oh no",
+				},
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			f := fsm.New(tt.initialState, tt.transitions)
+			for _, e := range tt.events {
+				assert.Equal(t, e.stateBefore, f.State())
+				err := f.Event(e.event)
+				assert.Equal(t, e.stateAfter, f.State())
+
+				if e.errContains == "" {
+					assert.NoError(t, err)
+				} else {
+					assert.ErrorContains(t, err, e.errContains)
+				}
+			}
+		})
+	}
+}

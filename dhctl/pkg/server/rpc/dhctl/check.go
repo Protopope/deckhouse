@@ -28,44 +28,83 @@ import (
 	"github.com/deckhouse/deckhouse/dhctl/pkg/operations/check"
 	"github.com/deckhouse/deckhouse/dhctl/pkg/operations/commander"
 	"github.com/deckhouse/deckhouse/dhctl/pkg/operations/phases"
+	"github.com/deckhouse/deckhouse/dhctl/pkg/server/fsm"
 	pb "github.com/deckhouse/deckhouse/dhctl/pkg/server/pb/dhctl"
 	"github.com/deckhouse/deckhouse/dhctl/pkg/state/cache"
 	"github.com/deckhouse/deckhouse/dhctl/pkg/system/ssh"
 	"github.com/deckhouse/deckhouse/dhctl/pkg/system/ssh/session"
 	"github.com/deckhouse/deckhouse/dhctl/pkg/terraform"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func (s *Service) Check(server pb.DHCTL_CheckServer) error {
-	// todo: support task cancellation messages
-	r, err := server.Recv()
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		return status.Errorf(codes.Internal, "receiving message: %s", err)
-	}
+	ctx, cancel := context.WithCancel(server.Context())
+	defer cancel()
+	g := &errgroup.Group{}
+	f := fsm.New("initial", s.checkTransitions())
 
-	request := r.GetStart()
-	if request == nil {
+	g.Go(func() error {
+		for {
+			request, err := server.Recv()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				return status.Errorf(codes.Internal, "receiving message: %s", err)
+			}
+
+			g.Go(func() error {
+				return s.handleMessage(ctx, cancel, server, f, request)
+			})
+		}
+	})
+
+	return g.Wait()
+}
+
+// todo: do not cancel check if server get invalid message
+
+func (s *Service) handleMessage(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	server pb.DHCTL_CheckServer,
+	f *fsm.FiniteStateMachine,
+	request *pb.CheckRequest,
+) error {
+	switch message := request.Message.(type) {
+	case *pb.CheckRequest_Start:
+		err := f.Event("start")
+		if err != nil {
+			return status.Errorf(codes.InvalidArgument, "invalid message: %s", err)
+		}
+		result, err := s.check(ctx, message.Start, &logWriter{server: server})
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return err
+		}
+		err = server.Send(&pb.CheckResponse{
+			Message: &pb.CheckResponse_Result{
+				Result: result,
+			},
+		})
+		if err != nil {
+			return status.Errorf(codes.Internal, "sending message: %s", err)
+		}
+		return nil
+	case *pb.CheckRequest_Stop:
+		err := f.Event("stop")
+		if err != nil {
+			return status.Errorf(codes.InvalidArgument, "invalid message: %s", err)
+		}
+		cancel()
+		return nil
+	default:
 		return status.Errorf(codes.Unimplemented, "message not supported")
 	}
-
-	result, err := s.check(server.Context(), request, &logWriter{server: server})
-	if err != nil {
-		return err
-	}
-
-	err = server.Send(&pb.CheckResponse{
-		Message: &pb.CheckResponse_Result{
-			Result: result,
-		},
-	})
-	if err != nil {
-		return status.Errorf(codes.Internal, "sending message: %s", err)
-	}
-	return nil
 }
 
 func (s *Service) check(
@@ -100,7 +139,6 @@ func (s *Service) check(
 		request.Config,
 		config.ValidateOptionCommanderMode(request.Options.CommanderMode),
 		config.ValidateOptionStrictUnmarshal(request.Options.CommanderMode),
-		config.ValidateOptionValidateExtensions(request.Options.CommanderMode),
 	)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "parsing meta config: %s", err)
@@ -179,6 +217,21 @@ func prepareSSHClient(connectionConfig *config.ConnectionConfig) (*ssh.Client, e
 		return nil, fmt.Errorf("starting ssh client: %w", err)
 	}
 	return sshClient, nil
+}
+
+func (s *Service) checkTransitions() []fsm.Transition {
+	return []fsm.Transition{
+		{
+			Event:       "start",
+			Sources:     []fsm.State{"initial"},
+			Destination: "started",
+		},
+		{
+			Event:       "stop",
+			Sources:     []fsm.State{"started"},
+			Destination: "stopped",
+		},
+	}
 }
 
 type logWriter struct {
