@@ -1171,5 +1171,4 @@ func deepCopyList[T deepCopier[T]](list []T) []T {
 	}
 
 	return result
-
 }
