@@ -27,7 +27,7 @@ if [[ "$count_default" -gt "1" ]]; then
   configured_macs="$(grep -Po '(?<=macaddress: ).+' /etc/netplan/50-cloud-init.yaml)"
   echo "configured_macs: $configured_macs"
   for mac in $configured_macs; do
-    ifname="$(ip -o link show | grep "link/ether $mac" | cut -d ":" -f2 | tr -d " ")|"
+    ifname="$(ip -o link show | grep "link/ether $mac" | cut -d ":" -f2 | tr -d " ")"
     if [[ "$ifname" != "" ]]; then
       configured_ifnames_pattern+="$ifname "
     fi
