@@ -5,6 +5,10 @@
 */}}
 shopt -s extglob
 
+if ! which netplan 2>/dev/null 1>&2; then
+  return 0
+fi
+
 function cat_file() {
   cat_dev=$1
   cat_metric=$2
