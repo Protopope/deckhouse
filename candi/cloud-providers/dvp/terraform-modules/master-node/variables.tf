@@ -27,8 +27,8 @@ locals {
   vm_additional_labels      = lookup(local.master_instance_class.virtualMachine, "additionalLabels", {})
   vm_additional_annotations = lookup(local.master_instance_class.virtualMachine, "additionalAnnotations", {})
   vm_priority_class_name    = lookup(local.master_instance_class.virtualMachine, "priorityClassName", null)
-  vm_node_selector          = lookup(local.master_instance_class.virtualMachine, "nodeSelector", {})
-  vm_tolerations            = lookup(local.master_instance_class.virtualMachine, "tolerations", {})
+  vm_node_selector          = lookup(local.master_instance_class.virtualMachine, "nodeSelector", null)
+  vm_tolerations            = lookup(local.master_instance_class.virtualMachine, "tolerations", null)
 
   vm_cpu_cores         = local.master_instance_class.virtualMachine.cpu.cores
   vm_cpu_core_fraction = lookup(local.master_instance_class.virtualMachine.cpu, "coreFraction", "100%")

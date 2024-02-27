@@ -21,13 +21,6 @@ locals {
     }
   }
 
-  etc_disk_destructive_params = {
-    "rootDisk" = {
-      "storageClassName" = local.etcd_disk_storage_class_name
-    }
-  }
-
-
   vm_destructive_params = merge({
     "virtualMachine" = {
       "cpu" = {
@@ -46,21 +39,17 @@ locals {
     }
     },
     { "rootDiskHash" = local.root_disk_destructive_params_json_hash,
-    "etcDiskHash" = local.etc_disk_destructive_params_json_hash },
+    },
   )
 
   root_disk_destructive_params_json      = jsonencode(local.root_disk_destructive_params)
   root_disk_destructive_params_json_hash = substr(sha256(jsonencode(local.root_disk_destructive_params_json)), 0, 6)
 
-  etc_disk_destructive_params_json      = jsonencode(local.etc_disk_destructive_params)
-  etc_disk_destructive_params_json_hash = substr(sha256(jsonencode(local.etc_disk_destructive_params_json)), 0, 6)
-
   vm_destructive_params_json      = jsonencode(local.vm_destructive_params)
   vm_destructive_params_json_hash = substr(sha256(jsonencode(local.vm_destructive_params)), 0, 6)
 
-  root_disk_name = join("-", [local.prefix, "master-root", var.nodeIndex, local.root_disk_destructive_params_json_hash])
-  etc_disk_name  = join("-", [local.prefix, "kubernetes-data", var.nodeIndex, local.etc_disk_destructive_params_json_hash])
-  vm_host_name   = join("-", [local.prefix, "master", var.nodeIndex])
+  root_disk_name = join("-", [local.prefix, var.nodeGroupName, var.nodeIndex, local.root_disk_destructive_params_json_hash])
+  vm_host_name   = join("-", [local.prefix, var.nodeGroupName, var.nodeIndex])
   vm_name        = join("-", [local.vm_host_name, local.vm_destructive_params_json_hash])
   vmip_name      = format("%s-%s", local.vm_host_name, replace(local.vm_ip_address, ".", "-"))
 
@@ -68,7 +57,7 @@ locals {
     {
       "dvp.deckhouse.io/cluster-prefix" = local.prefix
       "dvp.deckhouse.io/cluster-uuid"   = var.clusterUUID
-      "dvp.deckhouse.io/node-group"     = "master"
+      "dvp.deckhouse.io/node-group"     = var.nodeGroupName
     },
   local.vm_additional_labels)
 
@@ -85,13 +74,9 @@ locals {
     "last_applied_destructive_root_disk_parameters_hash" = local.root_disk_destructive_params_json_hash
   }
 
-  etc_disk_annotations = {
-    "last_applied_destructive_root_disk_parameters"      = local.etc_disk_destructive_params_json
-    "last_applied_destructive_root_disk_parameters_hash" = local.etc_disk_destructive_params_json_hash
-  }
 }
 
-resource "kubernetes_manifest" "master-root-disk" {
+resource "kubernetes_manifest" "nodegroup-root-disk" {
   manifest = {
     "apiVersion" = local.apiVersion
     "kind"       = "VirtualMachineDisk"
@@ -127,35 +112,6 @@ resource "kubernetes_manifest" "master-root-disk" {
     ignore_changes = [
       object.spec.persistentVolumeClaim.storageClassName
     ]
-  }
-}
-
-resource "kubernetes_manifest" "kubernetes-data-disk" {
-  manifest = {
-    "apiVersion" = local.apiVersion
-    "kind"       = "VirtualMachineDisk"
-    "metadata" = {
-      "name"        = local.etc_disk_name
-      "namespace"   = local.namespace
-      "annotations" = local.etc_disk_annotations
-    }
-    "spec" = {
-      "persistentVolumeClaim" = merge({
-        "size" = local.etcd_disk_size
-        },
-        local.etcd_disk_storage_class_name != null ? { "storageClassName" = local.etcd_disk_storage_class_name } : null
-      )
-    }
-  }
-  wait {
-    fields = {
-      "status.phase" = "Ready"
-    }
-  }
-  timeouts {
-    create = "30m"
-    update = "5m"
-    delete = "5m"
   }
 }
 
@@ -225,17 +181,13 @@ resource "kubernetes_manifest" "vm" {
           "size" = local.vm_memory_size
         }
 
+
+
         "blockDevices" = [
           {
             "type" = "VirtualMachineDisk"
             "virtualMachineDisk" = {
-              "name" = kubernetes_manifest.master-root-disk.manifest.metadata.name
-            }
-          },
-          {
-            "type" = "VirtualMachineDisk"
-            "virtualMachineDisk" = {
-              "name" = kubernetes_manifest.kubernetes-data-disk.manifest.metadata.name
+              "name" = kubernetes_manifest.nodegroup-root-disk.manifest.metadata.name
             }
           },
         ]
