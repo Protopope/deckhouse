@@ -207,6 +207,8 @@ resource "kubernetes_manifest" "vm" {
     }
     "spec" = merge(
       {
+        "terminationGracePeriodSeconds" = 90
+
         "bootloader"               = "BIOS"
         "enableParavirtualization" = true
         "osType"                   = "Generic"
