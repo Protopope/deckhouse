@@ -6,7 +6,7 @@ apiVersions:
     description: |
       Describes the configuration of a cloud cluster in Deckhouse Virtualization Platform (DVP).
 
-      Used by the cloud provider if a cluster's control plane is hosted in the cloud.
+      Used by the cloud provider if a cluster's control plane is hosted in the DVP cloud.
 
       Run the following command to change the configuration in a running cluster:
 
@@ -89,7 +89,7 @@ apiVersions:
     properties:
       apiVersion:
         type: string
-        enum: [deckhouse.io/v1, deckhouse.io/v1alpha1] # TODO а надо?
+        enum: [deckhouse.io/v1]
       kind:
         type: string
         enum: [DVPClusterConfiguration]
@@ -116,6 +116,7 @@ apiVersions:
             type: array
             description: |
               A set of zones in which nodes can be created.
+
               To use this setting, the `topology.kubernetes.io/zone` label must be set on DVP nodes.
               Read [more](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesioregion) about topological labels.
 
@@ -130,7 +131,7 @@ apiVersions:
           instanceClass:
             type: object
             description: |
-              VM and Disks settings for the created master node.
+              VM and its disks settings for the created master node.
             additionalProperties: false
             required: [virtualMachine, rootDisk, etcdDisk]
             properties:
@@ -160,7 +161,7 @@ apiVersions:
                         description: |
                           Guaranteed share of CPU that will be allocated to the VM. Specified as a percentage.
                           Supported values: `5%`, `10%`, `25%`, `50%`, `100%`.
-                        example: 100%
+                        example: "100%"
 
                   memory:
                     type: object
@@ -219,9 +220,9 @@ apiVersions:
                     type: object
 
                   priorityClassName:
-                      description: |
-                        [The same](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/)  as in the pods `spec.priorityClassName` parameter in Kubernetes;
-                      type: string
+                    description: |
+                      [The same](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/)  as in the pods `spec.priorityClassName` parameter in Kubernetes;
+                    type: string
 
                   tolerations:
                     type: array
@@ -285,10 +286,11 @@ apiVersions:
                         description: |
                           The name of the image that will be used to create the root disk.
 
+                          > The installation requires linux OS images with cloud-init pre-installed
               etcdDisk:
                 type: object
                 description: |
-                  Specifies settings for the etcd data disk.
+                  Specifies settings for the ETCD data disk.
                 required:
                   - size
                 properties:
@@ -417,7 +419,7 @@ apiVersions:
         description: |
           The way resources are located in the cloud.
 
-          Read [more](https://deckhouse.io/documentation/v1/modules/030-cloud-provider-yandex/layouts.html) about possible provider layouts.
+          Read [more](https://deckhouse.io/documentation/v1/modules/030-cloud-provider-dvp/layouts.html) about possible provider layouts.
         enum: [Standard]
 
       region:
@@ -458,6 +460,8 @@ apiVersions:
           namespace:
             description: |
               Namespace in which DKP cluster resources will be created.
+
+              > Caution! If not explicitly specified, the default namespace for kubeconfig will be used.
             type: string
         required:
         - kubeconfigBase64
