@@ -1,0 +1,13 @@
+${user_data}
+
+#cloud-config
+hostname: ${host_name}
+
+users:
+- name: user
+  gecos: DVP Cloud User
+  shell: /bin/bash
+  sudo: "ALL=(ALL) NOPASSWD:ALL"
+  lock_passwd: false
+  ssh_authorized_keys:
+    - "${ssh_public_key}"

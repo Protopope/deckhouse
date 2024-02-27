@@ -1,4 +1,4 @@
-kind: YandexClusterConfiguration
+kind: DVPClusterConfiguration
 apiVersions:
 - apiVersion: deckhouse.io/v1
   openAPISpec:
@@ -25,7 +25,6 @@ apiVersions:
         - zone-b
         - zone-c
         region: r1
-        namespace: # TODO: ???? to provider?
         masterNodeGroup:
           replicas: 3
           zones:
@@ -44,16 +43,13 @@ apiVersions:
               - 10.10.10.11
               - 10.10.10.12
               additionalLabels:
-                test-label1: value1
+                additional-vm-label: label-value
               additionalAnnotations:
-                test-annotation1: value2
-              topologySpreadConstraints: TODO: ???
-              affinity: TODO: ???
+                additional-vm-annotation: annotation-value
               tolerations:
-              - key: "key1"
+              - key: "dedicated.deckhouse.io"
                 operator: "Equal"
-                value: "value1"
-                effect: "NoSchedule"
+                value: "system"
               nodeSelector:
                 subzone: subzone-1
             rootDisk:
@@ -62,7 +58,7 @@ apiVersions:
               image:
                 type: ClusterVirtualMachineImage
                 name: ubuntu
-            etcDisk:
+            etcdDisk:
               size: 10Gi
               storageClassName: sc1
         nodeGroups:
@@ -82,10 +78,11 @@ apiVersions:
               rootDisk:
                 size: 10Gi
                 image:
-                  type: ClusterVirtualMachineImage
-                  name: ubuntu
+                  type: "ClusterVirtualMachineImage"
+                  name: "ubuntu"
         provider:
-          kubeconfigBase64: "<KUBECONFIG_BASE64_ENCODED>"
+          kubeconfigBase64: ZXhhbXBsZQo=
+          namespace: "<namespace>"
 
     additionalProperties: false
     required: [apiVersion, kind, masterNodeGroup, sshPublicKey, layout, provider]
@@ -135,7 +132,7 @@ apiVersions:
             description: |
               VM and Disks settings for the created master node.
             additionalProperties: false
-            required: [virtualMachine, rootDisk, etcDisk]
+            required: [virtualMachine, rootDisk, etcdDisk]
             properties:
 
               virtualMachine: &instanceClassVirtualMachine
@@ -192,6 +189,10 @@ apiVersions:
 
                   additionalLabels:
                     type: object
+                    x-doc-example: |
+                      ```yaml
+                      cluster-owner: user
+                      ```
                     description: |
                       Additional labels for VM resource.
                     additionalProperties:
@@ -199,6 +200,10 @@ apiVersions:
 
                   additionalAnnotations:
                     type: object
+                    x-doc-example: |
+                      ```yaml
+                      cluster-owner: user
+                      ```
                     description: |
                       Additional annotations for VM resource.
                     additionalProperties:
@@ -212,7 +217,7 @@ apiVersions:
 
                       [The same](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes//) as in the pods `spec.nodeSelector` parameter in Kubernetes;
                     type: object
-                  # TODO: А нада?
+
                   priorityClassName:
                       description: |
                         [The same](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/)  as in the pods `spec.priorityClassName` parameter in Kubernetes;
@@ -269,14 +274,14 @@ apiVersions:
                       Image parameters that will be used to create the VM's root disk.
                     properties:
                       type:
-                        type: String
+                        type: string
                         description: |
                           The type of the image source.
                         enum:
                         - "ClusterVirtualMachineImage"
                         - "VirtualMachineImage"
                       name:
-                        type: String
+                        type: string
                         description: |
                           The name of the image that will be used to create the root disk.
 
@@ -449,5 +454,11 @@ apiVersions:
             description: |
               Kubeconfig to connect to Deckhouse Kubernetes Platform API base64 encoded.
             type: string
+            pattern: '^[A-Za-z0-9+/]+[=]{0,2}$'
+          namespace:
+            description: |
+              Namespace in which DKP cluster resources will be created.
+            type: string
         required:
         - kubeconfigBase64
+        - namespace
