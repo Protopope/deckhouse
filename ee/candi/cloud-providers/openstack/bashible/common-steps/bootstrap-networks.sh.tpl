@@ -26,19 +26,15 @@ BOOTSTRAP_NETWORK_EOF
 }
 
 count_default=$(ip route show default | wc -l)
-echo "count_default: $count_default"
 if [[ "$count_default" -gt "1" ]]; then
   configured_macs="$(grep -Po '(?<=macaddress: ).+' /etc/netplan/50-cloud-init.yaml)"
-  echo "configured_macs: $configured_macs"
   for mac in $configured_macs; do
     ifname="$(ip -o link show | grep "link/ether $mac" | cut -d ":" -f2 | tr -d " ")"
     if [[ "$ifname" != "" ]]; then
       configured_ifnames_pattern+="$ifname "
     fi
   done
-  echo "configured_ifnames_pattern: $configured_ifnames_pattern"
   count_configured_ifnames=$(echo $configured_ifnames_pattern | wc -w)
-  echo "count_configured_ifnames: $count_configured_ifnames"
   if [[ "$count_configured_ifnames" -gt "1" ]]; then
     set +e
     check_metric=$(grep -Po '(?<=route-metric: ).+' /etc/netplan/50-cloud-init.yaml | wc -l)
