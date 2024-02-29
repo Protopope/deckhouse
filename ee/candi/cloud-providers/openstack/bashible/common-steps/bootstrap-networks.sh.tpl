@@ -6,7 +6,7 @@
 shopt -s extglob
 
 if ! which netplan 2>/dev/null 1>&2; then
-  return 0
+  exit 0
 fi
 
 function cat_file() {
