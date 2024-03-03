@@ -10,7 +10,7 @@ spec:
     endpoint: "https://loki.d8-monitoring:3100"
     auth:
       strategy: "Bearer"
-      token: {{ .Values.loki.internal.logShipperToken }}
+      token: "$LOG_SHIPPER_TOKEN"
     tls:
       verifyHostname: false
       verifyCertificate: false

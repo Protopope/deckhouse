@@ -17,6 +17,12 @@
   valueFrom:
     fieldRef:
       fieldPath: metadata.namespace
+- name: LOG_SHIPPER_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: log-shipper-token
+      key: token
+      optional: false
 {{- end }}
 
 {{- define "vectorMounts" }}

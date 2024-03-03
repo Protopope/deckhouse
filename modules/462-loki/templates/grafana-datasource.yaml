@@ -16,5 +16,5 @@ spec:
     tlsSkipVerify: true
     httpHeaderName1: 'Authorization'
   secureJsonData:
-    httpHeaderValue1: 'Bearer {{ .Values.loki.internal.grafanaToken }}'
+    httpHeaderValue1: 'Bearer $PROMETHEUS_TOKEN'
 {{- end }}
