@@ -1,4 +1,4 @@
-// Copyright 2021 Flant JSC
+// Copyright 2024 Flant JSC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package hooks
+package internal
 
 import (
 	"encoding/json"
@@ -58,20 +58,18 @@ func applyClusterConfigurationYamlFilter(obj *unstructured.Unstructured) (go_hoo
 	return cc, err
 }
 
-var _ = sdk.RegisterFunc(&go_hook.HookConfig{
-	Kubernetes: []go_hook.KubernetesConfig{
-		{
-			Name:              "clusterConfiguration",
-			ApiVersion:        "v1",
-			Kind:              "Secret",
-			NamespaceSelector: &types.NamespaceSelector{NameSelector: &types.NameSelector{MatchNames: []string{"kube-system"}}},
-			NameSelector:      &types.NameSelector{MatchNames: []string{"d8-cluster-configuration"}},
-			FilterFunc:        applyClusterConfigurationYamlFilter,
-		},
+var ClusterConfigurationConfig = []go_hook.KubernetesConfig{
+	{
+		Name:              "clusterConfiguration",
+		ApiVersion:        "v1",
+		Kind:              "Secret",
+		NamespaceSelector: &types.NamespaceSelector{NameSelector: &types.NameSelector{MatchNames: []string{"kube-system"}}},
+		NameSelector:      &types.NameSelector{MatchNames: []string{"d8-cluster-configuration"}},
+		FilterFunc:        applyClusterConfigurationYamlFilter,
 	},
-}, clusterConfiguration)
+}
 
-func clusterConfiguration(input *go_hook.HookInput) error {
+func ClusterConfiguration(input *go_hook.HookInput, currentK8sVersion string) error {
 	currentConfig, ok := input.Snapshots["clusterConfiguration"]
 
 	// no cluster configuration — unset global value if there is one.
@@ -97,7 +95,7 @@ func clusterConfiguration(input *go_hook.HookInput) error {
 		}
 
 		if kubernetesVersionFromMetaConfig == "Automatic" {
-			metaConfig.ClusterConfig["kubernetesVersion"], err = newAutomaticVersion(configYamlBytes.MaxUsedControlPlaneKubernetesVersion, config.DefaultKubernetesVersion)
+			metaConfig.ClusterConfig["kubernetesVersion"], err = newAutomaticVersion(configYamlBytes.MaxUsedControlPlaneKubernetesVersion, config.DefaultKubernetesVersion, currentK8sVersion)
 			if err != nil {
 				return err
 			}
@@ -177,7 +175,7 @@ func rawMessageToString(message json.RawMessage) (string, error) {
 	return result, err
 }
 
-func newAutomaticVersion(maxUsedControlPlaneKubernetesVersion string, configDefaultKubernetesVersion string) ([]byte, error) {
+func newAutomaticVersion(maxUsedControlPlaneKubernetesVersion string, configDefaultKubernetesVersion string, currentK8sVersion string) ([]byte, error) {
 	defaultKubernetesVersion, err := semver.NewVersion(configDefaultKubernetesVersion)
 	if err != nil {
 		return nil, err
@@ -187,12 +185,17 @@ func newAutomaticVersion(maxUsedControlPlaneKubernetesVersion string, configDefa
 	if err != nil || maxUsedKubernetesVersion == nil {
 		return json.Marshal(configDefaultKubernetesVersion)
 	}
+
 	finalKubernetesVersion := defaultKubernetesVersion
 
 	// kubernetes cannot be downgraded more than 1 minor version
 	if (maxUsedKubernetesVersion.Major()-defaultKubernetesVersion.Major()) > 0 ||
 		(maxUsedKubernetesVersion.Minor()-defaultKubernetesVersion.Minor()) > 1 {
-		finalKubernetesVersion = maxUsedKubernetesVersion
+		currentKubernetesSemver, err := semver.NewVersion(currentK8sVersion)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse current k8s version '%s' : %v", currentKubernetesSemver)
+		}
+		finalKubernetesVersion = currentKubernetesSemver
 	}
 	return json.Marshal(fmt.Sprintf("%d.%d", finalKubernetesVersion.Major(), finalKubernetesVersion.Minor()))
 }
