@@ -22,6 +22,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
+	"github.com/flant/addon-operator/pkg/module_manager/go_hook/metrics"
 	"github.com/flant/addon-operator/sdk"
 	"github.com/flant/shell-operator/pkg/kube_events_manager/types"
 	v1 "k8s.io/api/core/v1"
@@ -30,9 +31,19 @@ import (
 	"github.com/deckhouse/deckhouse/dhctl/pkg/config"
 )
 
+const (
+	cannotSetAutomaticVersionMetricsGroup = "cannot_set_automatic_version_metrics_group"
+)
+
 type ClusterConfigurationYaml struct {
 	Content                              []byte
 	MaxUsedControlPlaneKubernetesVersion string
+}
+
+type k8sVersions struct {
+	maxUsedControlPlane string
+	configDefault       string
+	current             string
 }
 
 func applyClusterConfigurationYamlFilter(obj *unstructured.Unstructured) (go_hook.FilterResult, error) {
@@ -70,6 +81,8 @@ var ClusterConfigurationConfig = []go_hook.KubernetesConfig{
 }
 
 func ClusterConfiguration(input *go_hook.HookInput, currentK8sVersion string) error {
+	input.MetricsCollector.Expire(cannotSetAutomaticVersionMetricsGroup)
+
 	currentConfig, ok := input.Snapshots["clusterConfiguration"]
 
 	// no cluster configuration — unset global value if there is one.
@@ -95,7 +108,12 @@ func ClusterConfiguration(input *go_hook.HookInput, currentK8sVersion string) er
 		}
 
 		if kubernetesVersionFromMetaConfig == "Automatic" {
-			metaConfig.ClusterConfig["kubernetesVersion"], err = newAutomaticVersion(configYamlBytes.MaxUsedControlPlaneKubernetesVersion, config.DefaultKubernetesVersion, currentK8sVersion)
+			versions := k8sVersions{
+				maxUsedControlPlane: configYamlBytes.MaxUsedControlPlaneKubernetesVersion,
+				configDefault:       config.DefaultKubernetesVersion,
+				current:             currentK8sVersion,
+			}
+			metaConfig.ClusterConfig["kubernetesVersion"], err = newAutomaticVersion(versions, input.MetricsCollector)
 			if err != nil {
 				return err
 			}
@@ -175,15 +193,15 @@ func rawMessageToString(message json.RawMessage) (string, error) {
 	return result, err
 }
 
-func newAutomaticVersion(maxUsedControlPlaneKubernetesVersion string, configDefaultKubernetesVersion string, currentK8sVersion string) ([]byte, error) {
-	defaultKubernetesVersion, err := semver.NewVersion(configDefaultKubernetesVersion)
+func newAutomaticVersion(versions k8sVersions, collector go_hook.MetricsCollector) ([]byte, error) {
+	defaultKubernetesVersion, err := semver.NewVersion(versions.configDefault)
 	if err != nil {
 		return nil, err
 	}
-	maxUsedKubernetesVersion, err := semver.NewVersion(maxUsedControlPlaneKubernetesVersion)
+	maxUsedKubernetesVersion, err := semver.NewVersion(versions.maxUsedControlPlane)
 	// Cant parse max used kubenetes version or maxUsedKubernetesVersion equal nil
 	if err != nil || maxUsedKubernetesVersion == nil {
-		return json.Marshal(configDefaultKubernetesVersion)
+		return json.Marshal(versions.configDefault)
 	}
 
 	finalKubernetesVersion := defaultKubernetesVersion
@@ -191,10 +209,15 @@ func newAutomaticVersion(maxUsedControlPlaneKubernetesVersion string, configDefa
 	// kubernetes cannot be downgraded more than 1 minor version
 	if (maxUsedKubernetesVersion.Major()-defaultKubernetesVersion.Major()) > 0 ||
 		(maxUsedKubernetesVersion.Minor()-defaultKubernetesVersion.Minor()) > 1 {
-		currentKubernetesSemver, err := semver.NewVersion(currentK8sVersion)
+		currentKubernetesSemver, err := semver.NewVersion(versions.current)
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse current k8s version '%s' : %v", currentKubernetesSemver)
 		}
+		collector.Set("d8_set_automatic_k8s_version_failed", 1.0, map[string]string{
+			"config_default_version":      versions.configDefault,
+			"current_version":             versions.current,
+			"max_used_in_cluster_version": versions.maxUsedControlPlane,
+		}, metrics.WithGroup(cannotSetAutomaticVersionMetricsGroup))
 		finalKubernetesVersion = currentKubernetesSemver
 	}
 	return json.Marshal(fmt.Sprintf("%d.%d", finalKubernetesVersion.Major(), finalKubernetesVersion.Minor()))

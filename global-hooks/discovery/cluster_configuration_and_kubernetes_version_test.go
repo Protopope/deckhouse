@@ -873,8 +873,8 @@ data:
 				Expect(f.ValuesGet("global.discovery.clusterDomain").String()).To(Equal("test.local"))
 
 				metrics := f.MetricsCollector.CollectedMetrics()
-				Expect(metrics).To(HaveLen(1))
-				value := metrics[0].Value
+				Expect(metrics).To(HaveLen(2))
+				value := metrics[1].Value
 				Expect(*value).To(Equal(float64(256)))
 			})
 
@@ -899,8 +899,8 @@ data:
 					Expect(f.ValuesGet("global.discovery.clusterDomain").String()).To(Equal("test.local"))
 
 					metrics := f.MetricsCollector.CollectedMetrics()
-					Expect(metrics).To(HaveLen(1))
-					value := metrics[0].Value
+					Expect(metrics).To(HaveLen(2))
+					value := metrics[1].Value
 					Expect(*value).To(Equal(float64(1024)))
 				})
 			})
@@ -957,8 +957,8 @@ data:
 				Expect(f.ValuesGet("global.discovery.clusterDomain").String()).To(Equal("test.local"))
 
 				metrics := f.MetricsCollector.CollectedMetrics()
-				Expect(metrics).To(HaveLen(1))
-				value := metrics[0].Value
+				Expect(metrics).To(HaveLen(2))
+				value := metrics[1].Value
 				Expect(*value).To(Equal(float64(1024)))
 			})
 
@@ -966,10 +966,11 @@ data:
 
 		Context("Automatic version less than 2 minor releases of maximum installed version", func() {
 			const curVersion = "1.26"
+			curVersionFull := fmt.Sprintf("%s.0", curVersion)
 			BeforeEach(func() {
 				dependency.TestDC.HTTPClient.DoMock.
 					Set(func(req *http.Request) (rp1 *http.Response, err error) {
-						return versionsResponse(fmt.Sprintf("%s.0", curVersion)), nil
+						return versionsResponse(curVersionFull), nil
 					})
 				f.BindingContexts.Set(f.KubeStateSetAndWaitForBindingContexts(stateD, 1))
 				f.RunHook()
@@ -980,10 +981,25 @@ data:
 
 				Expect(f.ValuesGet("global.clusterConfiguration.kubernetesVersion").String()).To(Equal(curVersion))
 
-				//metrics := f.MetricsCollector.CollectedMetrics()
-				//Expect(metrics).To(HaveLen(1))
-				//value := metrics[0].Value
-				//Expect(*value).To(Equal(float64(1024)))
+				metrics := f.MetricsCollector.CollectedMetrics()
+
+				foundExpireCannotSetAutomaticGroup := false
+				foundSetAutomaticVersionFailedMetric := false
+				for _, metric := range metrics {
+					if metric.Action == "expire" && metric.Group == "cannot_set_automatic_version_metrics_group" {
+						foundExpireCannotSetAutomaticGroup = true
+					}
+
+					if metric.Action == "set" && metric.Name == "d8_set_automatic_k8s_version_failed" {
+						foundSetAutomaticVersionFailedMetric = true
+						Expect(metric.Labels["current_version"]).To(Equal(curVersionFull))
+						Expect(metric.Labels["config_default_version"]).To(Equal("1.25"))
+						Expect(metric.Labels["max_used_in_cluster_version"]).To(Equal("1.27"))
+					}
+				}
+
+				Expect(foundExpireCannotSetAutomaticGroup).To(BeTrue())
+				Expect(foundSetAutomaticVersionFailedMetric).To(BeTrue())
 			})
 
 		})
