@@ -211,7 +211,7 @@ func newAutomaticVersion(versions k8sVersions, collector go_hook.MetricsCollecto
 		(maxUsedKubernetesVersion.Minor()-defaultKubernetesVersion.Minor()) > 1 {
 		currentKubernetesSemver, err := semver.NewVersion(versions.current)
 		if err != nil {
-			return nil, fmt.Errorf("cannot parse current k8s version '%s' : %v", currentKubernetesSemver)
+			return nil, fmt.Errorf("cannot parse current k8s version '%s' : %v", currentKubernetesSemver, err)
 		}
 		collector.Set("d8_set_automatic_k8s_version_failed", 1.0, map[string]string{
 			"config_default_version":      versions.configDefault,
