@@ -18,7 +18,6 @@ package hooks
 
 import (
 	"encoding/json"
-	"os"
 	"strconv"
 
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
@@ -142,23 +141,6 @@ const (
 
 func updateStatuses(input *go_hook.HookInput) error {
 	allModuleConfigsMap := snapshotToModuleConfigMap(input.Snapshots["configs"])
-	allModulesList := snapshotToModuleList(input.Snapshots["modules"])
-
-	bundleName := os.Getenv("DECKHOUSE_BUNDLE")
-
-	for _, module := range allModulesList {
-		cfg := allModuleConfigsMap[module.GetName()]
-		moduleStatus := d8config.Service().StatusReporter().ForModule(module, cfg, bundleName)
-		sPatch := makeStatusPatchForModule(module, moduleStatus)
-		if sPatch != nil {
-			input.LogEntry.Debugf(
-				"Patch /status for module/%s: status '%s' to '%s'",
-				module.GetName(),
-				module.Status.Status, sPatch.Status,
-			)
-			input.PatchCollector.MergePatch(sPatch, "deckhouse.io/v1alpha1", "Module", "", module.GetName(), object_patch.WithSubresource("/status"))
-		}
-	}
 
 	// Export metrics for configs with specified but obsolete versions and update module configs' statuses
 	input.MetricsCollector.Expire(d8ConfigGroup)
@@ -199,16 +181,6 @@ func makeStatusPatchForModuleConfig(cfg *v1alpha1.ModuleConfig, moduleConfigStat
 	}
 }
 
-func makeStatusPatchForModule(module *v1alpha1.Module, moduleStatus d8config.ModuleStatus) *moduleStatusPatch {
-	if module == nil || !isModuleStatusChanged(module.Status, moduleStatus) {
-		return nil
-	}
-
-	return &moduleStatusPatch{
-		Status: moduleStatus.Status,
-	}
-}
-
 func isModuleConfigStatusChanged(currentStatus v1alpha1.ModuleConfigStatus, moduleConfigStatus d8config.ModuleConfigStatus) bool {
 	switch {
 	case currentStatus.Version != moduleConfigStatus.Version:
@@ -217,10 +189,6 @@ func isModuleConfigStatusChanged(currentStatus v1alpha1.ModuleConfigStatus, modu
 		return true
 	}
 	return false
-}
-
-func isModuleStatusChanged(currentStatus v1alpha1.ModuleStatus, moduleStatus d8config.ModuleStatus) bool {
-	return currentStatus.Status != moduleStatus.Status
 }
 
 // snapshotToModuleConfigList returns a map of ModuleConfig items from untyped items in the snapshot.
@@ -244,19 +212,10 @@ func snapshotToModuleList(snapshot []go_hook.FilterResult) []*v1alpha1.Module {
 }
 
 type moduleConfigStatusPatch v1alpha1.ModuleConfigStatus
-type moduleStatusPatch v1alpha1.ModuleStatus
 
 func (sp moduleConfigStatusPatch) MarshalJSON() ([]byte, error) {
 	m := map[string]interface{}{
 		"status": v1alpha1.ModuleConfigStatus(sp),
-	}
-
-	return json.Marshal(m)
-}
-
-func (sp moduleStatusPatch) MarshalJSON() ([]byte, error) {
-	m := map[string]interface{}{
-		"status": v1alpha1.ModuleStatus(sp),
 	}
 
 	return json.Marshal(m)

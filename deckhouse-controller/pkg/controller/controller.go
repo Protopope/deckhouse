@@ -18,8 +18,10 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/flant/addon-operator/pkg/module_manager"
@@ -29,15 +31,18 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 
+	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/client/clientset/versioned"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/client/informers/externalversions"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/models"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/release"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/source"
+	d8config "github.com/deckhouse/deckhouse/go_lib/deckhouse-config"
 	d8http "github.com/deckhouse/deckhouse/go_lib/dependency/http"
 )
 
@@ -47,6 +52,7 @@ const (
 
 var (
 	epochLabelValue = fmt.Sprintf("%d", rand.Uint32())
+	bundleName      = os.Getenv("DECKHOUSE_BUNDLE")
 )
 
 type DeckhouseController struct {
@@ -66,6 +72,8 @@ type DeckhouseController struct {
 	moduleReleaseController      *release.Controller
 	modulePullOverrideController *release.ModulePullOverrideController
 }
+
+type moduleStatusPatch v1alpha1.ModuleStatus
 
 func NewDeckhouseController(ctx context.Context, config *rest.Config, mm *module_manager.ModuleManager, metricStorage *metric_storage.MetricStorage) (*DeckhouseController, error) {
 	mcClient, err := versioned.NewForConfig(config)
@@ -163,8 +171,62 @@ func (dml *DeckhouseController) runEventLoop(ec chan events.ModuleEvent) {
 				log.Errorf("Error occurred during the module %q turning off: %s", mod.GetBasicModule().GetName(), err)
 				continue
 			}
+
+		case events.ModulePhaseChanged:
+			err := dml.handleModuleStatusUpdate(event.ModuleName)
+			if err != nil {
+				log.Errorf("Error occurred during the module %q status update: %s", mod.GetBasicModule().GetName(), err)
+				continue
+			}
 		}
 	}
+}
+
+type patchStringValue struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value string `json:"value"`
+}
+
+func (dml *DeckhouseController) handleModuleStatusUpdate(moduleName string) error {
+	return retry.OnError(retry.DefaultRetry, errors.IsServiceUnavailable, func() error {
+		module, err := dml.kubeClient.DeckhouseV1alpha1().Modules().Get(dml.ctx, moduleName, v1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		moduleConfig, err := dml.kubeClient.DeckhouseV1alpha1().ModuleConfigs().Get(dml.ctx, moduleName, v1.GetOptions{})
+		if err != nil {
+			if errors.IsNotFound(err) {
+				moduleConfig = nil
+			} else {
+				return err
+			}
+		}
+
+		newModuleStatus := d8config.Service().StatusReporter().ForModule(module, moduleConfig, bundleName)
+		if module.Status.Status != newModuleStatus.Status {
+			patch, err := json.Marshal([]patchStringValue{{
+				Op:    "replace",
+				Path:  "/status/status",
+				Value: newModuleStatus.Status,
+			}})
+			if err != nil {
+				return err
+			}
+
+			log.Debugf("Patch /status for module/%s: status '%s' to '%s'", moduleName, module.Status.Status, newModuleStatus.Status)
+
+			_, err = dml.kubeClient.DeckhouseV1alpha1().Modules().Patch(dml.ctx, moduleName, types.JSONPatchType, patch, v1.PatchOptions{}, "status")
+			return err
+		}
+
+		return nil
+	})
+}
+
+func isModuleStatusChanged(currentStatus v1alpha1.ModuleStatus, moduleStatus d8config.ModuleStatus) bool {
+	return currentStatus.Status != moduleStatus.Status
 }
 
 // handleConvergeDone after converge we delete all absent Modules CR, which were not filled during this operator startup
