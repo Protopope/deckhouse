@@ -167,7 +167,7 @@ func run(ctx context.Context, operator *addon_operator.AddonOperator) error {
 		return err
 	}
 
-	err = dController.Start(operator.ModuleManager.GetModuleEventsChannel())
+	err = dController.Start(operator.ModuleManager.GetModuleEventsChannel(), operator.KubeConfigManager.KubeConfigEventCh())
 	if err != nil {
 		return err
 	}

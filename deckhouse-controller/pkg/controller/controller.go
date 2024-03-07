@@ -24,8 +24,9 @@ import (
 	"os"
 	"time"
 
+	config_events "github.com/flant/addon-operator/pkg/kube_config_manager/config"
 	"github.com/flant/addon-operator/pkg/module_manager"
-	"github.com/flant/addon-operator/pkg/module_manager/models/modules/events"
+	module_events "github.com/flant/addon-operator/pkg/module_manager/models/modules/events"
 	"github.com/flant/addon-operator/pkg/utils"
 	"github.com/flant/shell-operator/pkg/metric_storage"
 	log "github.com/sirupsen/logrus"
@@ -110,7 +111,7 @@ func NewDeckhouseController(ctx context.Context, config *rest.Config, mm *module
 	}, nil
 }
 
-func (dml *DeckhouseController) Start(ec chan events.ModuleEvent) error {
+func (dml *DeckhouseController) Start(moduleEventCh chan module_events.ModuleEvent, configEventCh chan config_events.KubeConfigEvent) error {
 	dml.informerFactory.Start(dml.ctx.Done())
 
 	err := dml.moduleReleaseController.RunPreflightCheck(dml.ctx)
@@ -125,7 +126,7 @@ func (dml *DeckhouseController) Start(ec chan events.ModuleEvent) error {
 		return err
 	}
 
-	go dml.runEventLoop(ec)
+	go dml.runEventLoop(moduleEventCh, configEventCh)
 
 	go dml.moduleSourceController.Run(dml.ctx, 3)
 	go dml.moduleReleaseController.Run(dml.ctx, 3)
@@ -134,49 +135,54 @@ func (dml *DeckhouseController) Start(ec chan events.ModuleEvent) error {
 	return nil
 }
 
-func (dml *DeckhouseController) runEventLoop(ec chan events.ModuleEvent) {
-	for event := range ec {
-		// event without module name
-		if event.EventType == events.FirstConvergeDone {
-			err := dml.handleConvergeDone()
-			if err != nil {
-				log.Errorf("Error occurred during the converge done: %s", err)
-			}
-			continue
-		}
-
-		mod, ok := dml.deckhouseModules[event.ModuleName]
-		if !ok {
-			log.Errorf("Module %q registered but not found in Deckhouse. Possible bug?", event.ModuleName)
-			continue
-		}
-		switch event.EventType {
-		case events.ModuleRegistered:
-			err := dml.handleModuleRegistration(mod)
-			if err != nil {
-				log.Errorf("Error occurred during the module %q registration: %s", mod.GetBasicModule().GetName(), err)
+func (dml *DeckhouseController) runEventLoop(moduleEventCh chan module_events.ModuleEvent, configEventCh chan config_events.KubeConfigEvent) {
+	for {
+		select {
+		case configEvent := <-configEventCh:
+			log.Info("Got kube config event %v", configEvent)
+		case moduleEvent := <-moduleEventCh:
+			// event without module name
+			if moduleEvent.EventType == module_events.FirstConvergeDone {
+				err := dml.handleConvergeDone()
+				if err != nil {
+					log.Errorf("Error occurred during the converge done: %s", err)
+				}
 				continue
 			}
 
-		case events.ModuleEnabled:
-			err := dml.handleEnabledModule(mod, true)
-			if err != nil {
-				log.Errorf("Error occurred during the module %q turning on: %s", mod.GetBasicModule().GetName(), err)
+			mod, ok := dml.deckhouseModules[moduleEvent.ModuleName]
+			if !ok {
+				log.Errorf("Module %q registered but not found in Deckhouse. Possible bug?", moduleEvent.ModuleName)
 				continue
 			}
+			switch moduleEvent.EventType {
+			case module_events.ModuleRegistered:
+				err := dml.handleModuleRegistration(mod)
+				if err != nil {
+					log.Errorf("Error occurred during the module %q registration: %s", mod.GetBasicModule().GetName(), err)
+					continue
+				}
 
-		case events.ModuleDisabled:
-			err := dml.handleEnabledModule(mod, false)
-			if err != nil {
-				log.Errorf("Error occurred during the module %q turning off: %s", mod.GetBasicModule().GetName(), err)
-				continue
-			}
+			case module_events.ModuleEnabled:
+				err := dml.handleEnabledModule(mod, true)
+				if err != nil {
+					log.Errorf("Error occurred during the module %q turning on: %s", mod.GetBasicModule().GetName(), err)
+					continue
+				}
 
-		case events.ModulePhaseChanged:
-			err := dml.handleModuleStatusUpdate(event.ModuleName)
-			if err != nil {
-				log.Errorf("Error occurred during the module %q status update: %s", mod.GetBasicModule().GetName(), err)
-				continue
+			case module_events.ModuleDisabled:
+				err := dml.handleEnabledModule(mod, false)
+				if err != nil {
+					log.Errorf("Error occurred during the module %q turning off: %s", mod.GetBasicModule().GetName(), err)
+					continue
+				}
+
+			case module_events.ModulePhaseChanged:
+				err := dml.handleModuleStatusUpdate(moduleEvent.ModuleName)
+				if err != nil {
+					log.Errorf("Error occurred during the module %q status update: %s", mod.GetBasicModule().GetName(), err)
+					continue
+				}
 			}
 		}
 	}
