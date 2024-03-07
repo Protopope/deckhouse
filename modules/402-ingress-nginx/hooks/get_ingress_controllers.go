@@ -21,12 +21,19 @@ import (
 
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
 	"github.com/flant/addon-operator/sdk"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/utils/pointer"
 )
 
 type Controller struct {
 	Name string                 `json:"name"`
 	Spec map[string]interface{} `json:"spec"`
+}
+
+type NodeLabelsInfo struct {
+	Name   string
+	Labels map[string]string
 }
 
 var _ = sdk.RegisterFunc(&go_hook.HookConfig{
@@ -39,8 +46,30 @@ var _ = sdk.RegisterFunc(&go_hook.HookConfig{
 			Kind:       "IngressNginxController",
 			FilterFunc: applyControllerFilter,
 		},
+		{
+			Name:                         "nodes",
+			ApiVersion:                   "v1",
+			Kind:                         "Node",
+			WaitForSynchronization:       pointer.Bool(false),
+			ExecuteHookOnEvents:          pointer.Bool(false),
+			ExecuteHookOnSynchronization: pointer.Bool(false),
+			FilterFunc:                   applyNodeFilter,
+		},
 	},
 }, setInternalValues)
+
+func applyNodeFilter(obj *unstructured.Unstructured) (go_hook.FilterResult, error) {
+	var node corev1.Node
+
+	err := sdk.FromUnstructured(obj, &node)
+	if err != nil {
+		return nil, err
+	}
+	return NodeLabelsInfo{
+		Name:   node.Name,
+		Labels: node.Labels,
+	}, nil
+}
 
 func applyControllerFilter(obj *unstructured.Unstructured) (go_hook.FilterResult, error) {
 	name := obj.GetName()
@@ -65,6 +94,7 @@ func applyControllerFilter(obj *unstructured.Unstructured) (go_hook.FilterResult
 	setDefaultEmptyObjectOnCondition("hostPort", spec, inlet == "HostPort")
 	setDefaultEmptyObjectOnCondition("hostPortWithProxyProtocol", spec, inlet == "HostPortWithProxyProtocol")
 	setDefaultEmptyObjectOnCondition("hostWithFailover", spec, inlet == "HostWithFailover")
+	setDefaultEmptyObjectOnCondition("l2LoadBalancer", spec, inlet == "L2LoadBalancer")
 
 	setDefaultEmptyObject("hstsOptions", spec)
 	setDefaultEmptyObject("geoIP2", spec)

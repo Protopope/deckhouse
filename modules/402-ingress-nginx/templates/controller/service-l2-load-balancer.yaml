@@ -1,0 +1,40 @@
+{{- $context := . }}
+{{- range $crd := $context.Values.ingressNginx.internal.ingressControllers }}
+  {{- if eq $crd.spec.inlet "L2LoadBalancer" }}
+    {{ $addressPool := $crd.spec.l2LoadBalancer.addressPool }}
+    {{ $sourceRanges := $crd.spec.l2LoadBalancer.sourceRanges }}
+{{- range $index, $node := $crd.spec.l2LoadBalancer.nodes }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $crd.name }}-load-balancer-{{ $index }}
+  namespace: d8-ingress-nginx
+  {{- include "helm_lib_module_labels" (list $context (dict "app" "controller" "name" $crd.name )) | nindent 2 }}
+  annotations:
+    metallb.universe.tf/preferredL2SpeakerNode: {{ $node }}
+    {{- if $addressPool }}
+    metallb.universe.tf/address-pool: {{ $addressPool }}
+    {{- end }}
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+    {{- if $sourceRanges }}
+  loadBalancerSourceRanges:
+    {{- $sourceRanges | toYaml | nindent 4 }}
+    {{- end }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
+  selector:
+    app: controller
+    name: {{ $crd.name }}
+  {{- end }}
+{{- end }}
+{{- end }}

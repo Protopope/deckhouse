@@ -549,6 +549,10 @@ spec:
                     inlet:
                       enum: ['HostWithFailover']
                     hostWithFailover: {}
+                - properties:
+                    inlet:
+                      enum: ['L2LoadBalancer']
+                    l2LoadBalancer: {}
               x-kubernetes-validations:
               - message: .spec.controllerVersion should be explicitly set to 1.9 for .spec.annotationValidationEnabled to make effect
                 rule: 'self.annotationValidationEnabled == true ? self.controllerVersion == ''1.9'': true'
