@@ -1,6 +1,12 @@
 ---
 artifact: {{ .ModuleName }}/metallb-artifact
 from: {{ .Images.BASE_GOLANG_20_ALPINE }}
+git:
+  - add: /{{ $.ModulePath }}modules/380-{{ $.ModuleName }}/images/{{ $.ImageName }}/patches
+    to: /patches
+    stageDependencies:
+      install:
+        - '**/*'
 shell:
   install:
     - apk add --no-cache git
@@ -11,6 +17,7 @@ shell:
     # https://github.com/metallb/metallb/pull/2004
     # Remove cherry-pick when this commit is included in the release
     - git cherry-pick 667ab7e93d1e6465d5b6d343b73b3c7b1edd5015
+    - test -d /patches/ && for patchfile in /patches/*.patch ; do git apply ${patchfile} ; done
     - export GO_VERSION=${GOLANG_VERSION}
     - export GOPROXY={{ $.GOPROXY }}
     - cd controller
