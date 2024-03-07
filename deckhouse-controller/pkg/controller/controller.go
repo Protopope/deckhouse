@@ -74,7 +74,11 @@ type DeckhouseController struct {
 	modulePullOverrideController *release.ModulePullOverrideController
 }
 
-type moduleStatusPatch v1alpha1.ModuleStatus
+type patchStringValue struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value string `json:"value"`
+}
 
 func NewDeckhouseController(ctx context.Context, config *rest.Config, mm *module_manager.ModuleManager, metricStorage *metric_storage.MetricStorage) (*DeckhouseController, error) {
 	mcClient, err := versioned.NewForConfig(config)
@@ -126,6 +130,11 @@ func (dml *DeckhouseController) Start(moduleEventCh chan module_events.ModuleEve
 		return err
 	}
 
+	err = dml.resetModulesAndConfigsStatus()
+	if err != nil {
+		return err
+	}
+
 	go dml.runEventLoop(moduleEventCh, configEventCh)
 
 	go dml.moduleSourceController.Run(dml.ctx, 3)
@@ -133,6 +142,57 @@ func (dml *DeckhouseController) Start(moduleEventCh chan module_events.ModuleEve
 	go dml.modulePullOverrideController.Run(dml.ctx, 1)
 
 	return nil
+}
+
+// resetModulesAndConfigsStatus resets modules' and moduleconfigs' status fields at start
+func (dml *DeckhouseController) resetModulesAndConfigsStatus() error {
+	return retry.OnError(retry.DefaultRetry, errors.IsServiceUnavailable, func() error {
+		modules, err := dml.kubeClient.DeckhouseV1alpha1().Modules().List(dml.ctx, v1.ListOptions{})
+		if err != nil {
+			return err
+		}
+
+		for _, module := range modules.Items {
+			patch, err := json.Marshal([]patchStringValue{{
+				Op:    "replace",
+				Path:  "/status/status",
+				Value: "Pending",
+			}, {
+				Op:    "replace",
+				Path:  "/status/message",
+				Value: "",
+			}})
+			if err != nil {
+				return err
+			}
+			_, err = dml.kubeClient.DeckhouseV1alpha1().Modules().Patch(dml.ctx, module.Name, types.JSONPatchType, patch, v1.PatchOptions{}, "status")
+			if err != nil {
+				return err
+			}
+		}
+
+		moduleConfigs, err := dml.kubeClient.DeckhouseV1alpha1().ModuleConfigs().List(dml.ctx, v1.ListOptions{})
+		if err != nil {
+			return err
+		}
+
+		for _, moduleConfig := range moduleConfigs.Items {
+			patch, err := json.Marshal([]patchStringValue{{
+				Op:    "replace",
+				Path:  "/status/message",
+				Value: "",
+			}})
+			if err != nil {
+				return err
+			}
+			_, err = dml.kubeClient.DeckhouseV1alpha1().ModuleConfigs().Patch(dml.ctx, moduleConfig.Name, types.JSONPatchType, patch, v1.PatchOptions{}, "status")
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 func (dml *DeckhouseController) runEventLoop(moduleEventCh chan module_events.ModuleEvent, configEventCh chan config_events.KubeConfigEvent) {
@@ -186,12 +246,6 @@ func (dml *DeckhouseController) runEventLoop(moduleEventCh chan module_events.Mo
 			}
 		}
 	}
-}
-
-type patchStringValue struct {
-	Op    string `json:"op"`
-	Path  string `json:"path"`
-	Value string `json:"value"`
 }
 
 func (dml *DeckhouseController) handleModuleStatusUpdate(moduleName string) error {

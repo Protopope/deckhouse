@@ -72,7 +72,7 @@ spec:
           type: string
           description: "Module state explanation or last error"
           jsonPath: .status.status
-        - name: Message 
+        - name: Message
           type: string
           description: "Additional information"
           jsonPath: .status.message
