@@ -43,6 +43,7 @@ spec:
                     The way traffic goes to cluster from the outer network.
                     * `LoadBalancer` — Ingress controller is deployed and the service of `LoadBalancer` type is provisioned.
                     * `LoadBalancerWithProxyProtocol` — Ingress controller is deployed and the service of `LoadBalancer` type is provisioned. Ingress controller uses proxy-protocol to get a real IP of the client.
+                    * `L2LoadBalancer` - Ingress controller is deployed and the services of `LoadBalancer` (MetalLB) type is provisioned in resilient mode.
                     * `HostPort` — Ingress controller is deployed and available through nodes' ports via `hostPort`.
                     * `HostPortWithProxyProtocol` — Ingress controller is deployed and available through nodes' ports via `hostPort, it uses proxy-protocol to get a real IP of the client.
 
@@ -52,7 +53,7 @@ spec:
                       **Caution!** There can be only one controller with this inlet type on a host.
 
                       **Caution!** The following ports must be available on the node: 80, 81, 443, 444, 10354, 10355.
-                  enum: ["LoadBalancer","LoadBalancerWithProxyProtocol","HostPort","HostPortWithProxyProtocol", "HostWithFailover"]
+                  enum: ["LoadBalancer","LoadBalancerWithProxyProtocol","HostPort","HostPortWithProxyProtocol", "HostWithFailover", "L2LoadBalancer"]
                 controllerVersion:
                   type: string
                   description: |
@@ -96,6 +97,22 @@ spec:
                     Enables the annotation validation feature.
 
                     Requires a controller of 1.9 version.
+                l2LoadBalancer:
+                  type: object
+                  description: |
+                    A section of parameters of the `LoadBalancer` inlet.
+                  properties:
+                    addressPool:
+                      type: string
+                      description: |
+                        Name of MetalLB pool.
+                    sourceRanges:
+                      type: array
+                      description: |
+                        IP ranges (CIDR) that are allowed to access the load balancer.
+                      items:
+                        type: string
+                        pattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(3[0-2]|[1-2][0-9]|[0-9]))$'
                 nodeSelector:
                   type: object
                   additionalProperties:

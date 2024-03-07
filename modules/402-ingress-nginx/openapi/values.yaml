@@ -88,6 +88,17 @@ properties:
                 annotationValidationEnabled:
                   type: boolean
                   default: false
+                l2LoadBalancer:
+                  type: object
+                  description: |
+                    Properties for IngressNginxControllers with type `L2LoadBalancer`
+                  properties:
+                    nodes:
+                      type: array
+                      description: |
+                        Names of preferred nodes
+                      items:
+                        type: string
                 nodeSelector:
                     type: object
                     additionalProperties:
