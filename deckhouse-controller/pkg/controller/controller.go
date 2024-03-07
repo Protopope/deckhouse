@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"time"
 
 	config_events "github.com/flant/addon-operator/pkg/kube_config_manager/config"
@@ -44,6 +45,7 @@ import (
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/release"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/module-controllers/source"
 	d8config "github.com/deckhouse/deckhouse/go_lib/deckhouse-config"
+	"github.com/deckhouse/deckhouse/go_lib/deckhouse-config/conversion"
 	d8http "github.com/deckhouse/deckhouse/go_lib/dependency/http"
 )
 
@@ -62,6 +64,8 @@ type DeckhouseController struct {
 	dirs       []string
 	mm         *module_manager.ModuleManager // probably it's better to set it via the interface
 	kubeClient *versioned.Clientset
+
+	metricStorage *metric_storage.MetricStorage
 
 	deckhouseModules map[string]*models.DeckhouseModule
 	// <module-name>: <module-source>
@@ -105,6 +109,8 @@ func NewDeckhouseController(ctx context.Context, config *rest.Config, mm *module
 		dirs:       utils.SplitToPaths(mm.ModulesDir),
 		mm:         mm,
 
+		metricStorage: metricStorage,
+
 		deckhouseModules: make(map[string]*models.DeckhouseModule),
 		sourceModules:    make(map[string]string),
 
@@ -130,7 +136,7 @@ func (dml *DeckhouseController) Start(moduleEventCh chan module_events.ModuleEve
 		return err
 	}
 
-	err = dml.resetModulesAndConfigsStatus()
+	err = dml.initModulesAndConfigsStatus()
 	if err != nil {
 		return err
 	}
@@ -144,8 +150,8 @@ func (dml *DeckhouseController) Start(moduleEventCh chan module_events.ModuleEve
 	return nil
 }
 
-// resetModulesAndConfigsStatus resets modules' and moduleconfigs' status fields at start
-func (dml *DeckhouseController) resetModulesAndConfigsStatus() error {
+// initModulesAndConfigsStatus inits modules' and moduleconfigs' status fields at start up
+func (dml *DeckhouseController) initModulesAndConfigsStatus() error {
 	return retry.OnError(retry.DefaultRetry, errors.IsServiceUnavailable, func() error {
 		modules, err := dml.kubeClient.DeckhouseV1alpha1().Modules().List(dml.ctx, v1.ListOptions{})
 		if err != nil {
@@ -156,7 +162,7 @@ func (dml *DeckhouseController) resetModulesAndConfigsStatus() error {
 			patch, err := json.Marshal([]patchStringValue{{
 				Op:    "replace",
 				Path:  "/status/status",
-				Value: "Pending",
+				Value: "",
 			}, {
 				Op:    "replace",
 				Path:  "/status/message",
@@ -177,17 +183,41 @@ func (dml *DeckhouseController) resetModulesAndConfigsStatus() error {
 		}
 
 		for _, moduleConfig := range moduleConfigs.Items {
-			patch, err := json.Marshal([]patchStringValue{{
-				Op:    "replace",
-				Path:  "/status/message",
-				Value: "",
-			}})
-			if err != nil {
-				return err
+			newModuleConfigStatus := d8config.Service().StatusReporter().ForConfig(&moduleConfig)
+			if (moduleConfig.Status.Message != newModuleConfigStatus.Message) || (moduleConfig.Status.Version != newModuleConfigStatus.Version) {
+				patch, err := json.Marshal([]patchStringValue{{
+					Op:    "replace",
+					Path:  "/status/message",
+					Value: newModuleConfigStatus.Message,
+				}, {
+					Op:    "replace",
+					Path:  "/status/Version",
+					Value: newModuleConfigStatus.Version,
+				}})
+				if err != nil {
+					return err
+				}
+
+				log.Debugf(
+					"Patch /status for moduleconfig/%s: version '%s' to %s', message '%s' to '%s'",
+					moduleConfig.Name,
+					moduleConfig.Status.Version, newModuleConfigStatus.Version,
+					moduleConfig.Status.Message, newModuleConfigStatus.Message,
+				)
+
+				_, err = dml.kubeClient.DeckhouseV1alpha1().ModuleConfigs().Patch(dml.ctx, moduleConfig.Name, types.JSONPatchType, patch, v1.PatchOptions{}, "status")
+				if err != nil {
+					return err
+				}
 			}
-			_, err = dml.kubeClient.DeckhouseV1alpha1().ModuleConfigs().Patch(dml.ctx, moduleConfig.Name, types.JSONPatchType, patch, v1.PatchOptions{}, "status")
-			if err != nil {
-				return err
+
+			chain := conversion.Registry().Chain(moduleConfig.Name)
+			if moduleConfig.Spec.Version > 0 && chain.Conversion(moduleConfig.Spec.Version) != nil {
+				dml.metricStorage.GaugeSet("module_config_obsolete_version", 1.0, map[string]string{
+					"name":    moduleConfig.Name,
+					"version": strconv.Itoa(moduleConfig.Spec.Version),
+					"latest":  strconv.Itoa(chain.LatestVersion()),
+				})
 			}
 		}
 
