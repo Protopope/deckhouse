@@ -23,6 +23,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash"
+	"net"
+	"os"
 	"sort"
 
 	"github.com/mohae/deepcopy"
@@ -378,12 +380,13 @@ func (rid registryInputData) toRegistry() registry {
 	}
 
 	return registry{
-		Address:   rid.Address,
-		Path:      rid.Path,
-		Scheme:    rid.Scheme,
-		CA:        rid.CA,
-		DockerCFG: rid.DockerConfig,
-		Auth:      auth,
+		Address:              rid.Address,
+		Path:                 rid.Path,
+		Scheme:               rid.Scheme,
+		CA:                   rid.CA,
+		DockerCFG:            rid.DockerConfig,
+		Auth:                 auth,
+		PackagesProxyAddress: net.JoinHostPort(os.Getenv("HOST_IP"), "8081"),
 	}
 }
 
@@ -521,12 +524,13 @@ type normal struct {
 }
 
 type registry struct {
-	Address   string `json:"address" yaml:"address"`
-	Path      string `json:"path" yaml:"path"`
-	Scheme    string `json:"scheme" yaml:"scheme"`
-	CA        string `json:"ca,omitempty" yaml:"ca,omitempty"`
-	DockerCFG []byte `json:"dockerCfg" yaml:"dockerCfg"`
-	Auth      string `json:"auth" yaml:"auth"`
+	Address              string `json:"address" yaml:"address"`
+	Path                 string `json:"path" yaml:"path"`
+	Scheme               string `json:"scheme" yaml:"scheme"`
+	CA                   string `json:"ca,omitempty" yaml:"ca,omitempty"`
+	DockerCFG            []byte `json:"dockerCfg" yaml:"dockerCfg"`
+	Auth                 string `json:"auth" yaml:"auth"`
+	PackagesProxyAddress string `json:"packagesProxyAddress,omitempty" yaml:"packagesProxyAddress,omitempty"`
 }
 
 // input from secret

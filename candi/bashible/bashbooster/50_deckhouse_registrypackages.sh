@@ -105,6 +105,15 @@ bb-rp-fetch-manifests() {
     "${URLs[@]}"
 }
 
+bb-rp-fetch-from-proxy() {
+  python3 <<EOF
+import urllib.request
+
+url = "http://${REGISTRY_PACKAGES_PROXY_ADDRESS}/package?digest=$1"
+urllib.request.urlretrieve(url, "$2")
+EOF
+}
+
 # Fetch digests from registry and save to file
 # bb-rp-fetch-blobs map[blob_digest]output_file_path
 #
@@ -112,20 +121,12 @@ bb-rp-fetch-manifests() {
 # due to the limitations of using `declare -n` in CentOS 7 (bash 4.2, and 4.3 is needed).
 # DO NOT CALL THIS FUNCTION DIRECTLY!
 bb-rp-fetch-blobs() {
-  local TOKEN=""
-  TOKEN="$(bb-rp-get-token)"
-
-  local URLs=()
-  # key - digest to fetch, value - output file path
-  local BLOB_DIGEST
-  for BLOB_DIGEST in "${!BLOB_FILES_MAP[@]}"; do
-    URLs+=(
-      -o "${BLOB_FILES_MAP[$BLOB_DIGEST]}"
-      "${SCHEME}://${REGISTRY_ADDRESS}/v2${REGISTRY_PATH}/blobs/${BLOB_DIGEST}"
-    )
+  local PACKAGE_DIGEST
+  for PACKAGE_DIGEST in "${!PACKAGES_MAP[@]}"; do
+    local PACKAGE_DIR="${BB_RP_FETCHED_PACKAGES_STORE}/${PACKAGES_MAP[$PACKAGE_DIGEST]}"
+    mkdir "${PACKAGE_DIR}"
+    bb-rp-fetch-from-proxy "${PACKAGE_DIGEST}" "${PACKAGE_DIR}/${PACKAGE_DIGEST}.tar.gz"
   done
-
-  bb-rp-curl -fsSLH "Authorization: Bearer ${TOKEN}" "${URLs[@]}"
 }
 
 # Fetch packages by digest
@@ -158,30 +159,14 @@ bb-rp-fetch() {
     return 0
   fi
 
-  bb-log-info "Fetching manifests: ${PACKAGES_MAP[*]}"
-  bb-rp-fetch-manifests PACKAGES_MAP
-  if bb-error?; then
-    bb-log-error "Failed to fetch manifests"
-    return "${BB_ERROR}"
-  fi
-
-  declare -A BLOB_FILES_MAP
-  local PACKAGE_DIGEST
-  for PACKAGE_DIGEST in "${!PACKAGES_MAP[@]}"; do
-    local PACKAGE_DIR="${BB_RP_FETCHED_PACKAGES_STORE}/${PACKAGES_MAP[$PACKAGE_DIGEST]}"
-    jq -er '.layers[-1].digest' "${PACKAGE_DIR}/manifest.json" > "${PACKAGE_DIR}/top_layer_digest"
-    BLOB_FILES_MAP[$(cat "${PACKAGE_DIR}/top_layer_digest")]="${PACKAGE_DIR}/${PACKAGE_DIGEST}.tar.gz"
-  done
-
   bb-log-info "Fetching packages: ${PACKAGES_MAP[*]}"
-  bb-rp-fetch-blobs BLOB_FILES_MAP
+  bb-rp-fetch-blobs PACKAGES_MAP
   if bb-error?; then
     bb-log-error "Failed to fetch packages"
     return "${BB_ERROR}"
   fi
   bb-log-info "Packages saved under ${BB_RP_FETCHED_PACKAGES_STORE}"
 }
-
 
 # Unpack packages and run install script
 # bb-rp-install package:digest
