@@ -169,7 +169,7 @@ func resolveStatisticsStatus(status string) CheckStatus {
 		return CheckStatusDestructiveOutOfSync
 	case converge.AbandonedStatus:
 		// NOTE: Excess node — treat as out-of-sync for now
-		return CheckStatusOutOfSync
+		return CheckStatusDestructiveOutOfSync
 	case converge.AbsentStatus:
 		// NOTE: Lost node — treat as out-of-sync for now
 		return CheckStatusOutOfSync
