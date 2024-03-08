@@ -77,10 +77,10 @@ type DeckhouseController struct {
 	modulePullOverrideController *release.ModulePullOverrideController
 }
 
-type patchStringValue struct {
-	Op    string `json:"op"`
-	Path  string `json:"path"`
-	Value string `json:"value"`
+type jsonPatch struct {
+	Op    string                 `json:"op"`
+	Path  string                 `json:"path"`
+	Value map[string]interface{} `json:"value"`
 }
 
 func NewDeckhouseController(ctx context.Context, config *rest.Config, mm *module_manager.ModuleManager, metricStorage *metric_storage.MetricStorage) (*DeckhouseController, error) {
@@ -153,14 +153,9 @@ func (dml *DeckhouseController) InitModulesAndConfigsStatuses() error {
 		}
 
 		for _, module := range modules.Items {
-			patch, err := json.Marshal([]patchStringValue{{
-				Op:    "replace",
-				Path:  "/status/status",
-				Value: "",
-			}, {
-				Op:    "replace",
-				Path:  "/status/message",
-				Value: "",
+			patch, err := json.Marshal([]jsonPatch{{
+				Op:   "remove",
+				Path: "/status",
 			}})
 			if err != nil {
 				return err
@@ -250,14 +245,13 @@ func (dml *DeckhouseController) updateModuleConfigsStatuses(configsNames ...stri
 
 			newModuleConfigStatus := d8config.Service().StatusReporter().ForConfig(&moduleConfig)
 			if (moduleConfig.Status.Message != newModuleConfigStatus.Message) || (moduleConfig.Status.Version != newModuleConfigStatus.Version) {
-				patch, err := json.Marshal([]patchStringValue{{
-					Op:    "replace",
-					Path:  "/status/message",
-					Value: newModuleConfigStatus.Message,
-				}, {
-					Op:    "replace",
-					Path:  "/status/version",
-					Value: newModuleConfigStatus.Version,
+				patch, err := json.Marshal([]jsonPatch{{
+					Op:   "replace",
+					Path: "/status",
+					Value: map[string]interface{}{
+						"message": newModuleConfigStatus.Message,
+						"version": newModuleConfigStatus.Version,
+					},
 				}})
 				if err != nil {
 					return err
@@ -308,10 +302,10 @@ func (dml *DeckhouseController) updateModuleStatus(moduleName string) error {
 
 		newModuleStatus := d8config.Service().StatusReporter().ForModule(module, moduleConfig, bundleName)
 		if module.Status.Status != newModuleStatus.Status {
-			patch, err := json.Marshal([]patchStringValue{{
+			patch, err := json.Marshal([]jsonPatch{{
 				Op:    "replace",
-				Path:  "/status/status",
-				Value: newModuleStatus.Status,
+				Path:  "/status",
+				Value: map[string]interface{}{"status": newModuleStatus.Status},
 			}})
 			if err != nil {
 				return err
