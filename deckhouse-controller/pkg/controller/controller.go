@@ -154,8 +154,9 @@ func (dml *DeckhouseController) InitModulesAndConfigsStatuses() error {
 
 		for _, module := range modules.Items {
 			patch, err := json.Marshal([]jsonPatch{{
-				Op:   "remove",
-				Path: "/status",
+				Op:    "replace",
+				Path:  "/status",
+				Value: map[string]interface{}{},
 			}})
 			if err != nil {
 				return err
