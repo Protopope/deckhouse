@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 
+	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/client/clientset/versioned"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/client/informers/externalversions"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/models"
@@ -77,10 +78,16 @@ type DeckhouseController struct {
 	modulePullOverrideController *release.ModulePullOverrideController
 }
 
-type jsonPatch struct {
-	Op    string                 `json:"op"`
-	Path  string                 `json:"path"`
-	Value map[string]interface{} `json:"value"`
+type modulePatch struct {
+	Op    string                `json:"op"`
+	Path  string                `json:"path"`
+	Value v1alpha1.ModuleStatus `json:"value"`
+}
+
+type moduleConfigPatch struct {
+	Op    string                      `json:"op"`
+	Path  string                      `json:"path"`
+	Value v1alpha1.ModuleConfigStatus `json:"value"`
 }
 
 func NewDeckhouseController(ctx context.Context, config *rest.Config, mm *module_manager.ModuleManager, metricStorage *metric_storage.MetricStorage) (*DeckhouseController, error) {
@@ -153,10 +160,10 @@ func (dml *DeckhouseController) InitModulesAndConfigsStatuses() error {
 		}
 
 		for _, module := range modules.Items {
-			patch, err := json.Marshal([]jsonPatch{{
+			patch, err := json.Marshal([]modulePatch{{
 				Op:    "replace",
 				Path:  "/status",
-				Value: map[string]interface{}{},
+				Value: v1alpha1.ModuleStatus{},
 			}})
 			if err != nil {
 				return err
@@ -246,12 +253,12 @@ func (dml *DeckhouseController) updateModuleConfigsStatuses(configsNames ...stri
 
 			newModuleConfigStatus := d8config.Service().StatusReporter().ForConfig(&moduleConfig)
 			if (moduleConfig.Status.Message != newModuleConfigStatus.Message) || (moduleConfig.Status.Version != newModuleConfigStatus.Version) {
-				patch, err := json.Marshal([]jsonPatch{{
+				patch, err := json.Marshal([]moduleConfigPatch{{
 					Op:   "replace",
 					Path: "/status",
-					Value: map[string]interface{}{
-						"message": newModuleConfigStatus.Message,
-						"version": newModuleConfigStatus.Version,
+					Value: v1alpha1.ModuleConfigStatus{
+						Message: newModuleConfigStatus.Message,
+						Version: newModuleConfigStatus.Version,
 					},
 				}})
 				if err != nil {
@@ -303,10 +310,12 @@ func (dml *DeckhouseController) updateModuleStatus(moduleName string) error {
 
 		newModuleStatus := d8config.Service().StatusReporter().ForModule(module, moduleConfig, bundleName)
 		if module.Status.Status != newModuleStatus.Status {
-			patch, err := json.Marshal([]jsonPatch{{
-				Op:    "replace",
-				Path:  "/status",
-				Value: map[string]interface{}{"status": newModuleStatus.Status},
+			patch, err := json.Marshal([]modulePatch{{
+				Op:   "replace",
+				Path: "/status",
+				Value: v1alpha1.ModuleStatus{
+					Status: newModuleStatus.Status,
+				},
 			}})
 			if err != nil {
 				return err
