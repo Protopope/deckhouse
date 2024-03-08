@@ -37,7 +37,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 
-	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/client/clientset/versioned"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/client/informers/externalversions"
 	"github.com/deckhouse/deckhouse/deckhouse-controller/pkg/controller/models"
@@ -46,6 +45,7 @@ import (
 	d8config "github.com/deckhouse/deckhouse/go_lib/deckhouse-config"
 	"github.com/deckhouse/deckhouse/go_lib/deckhouse-config/conversion"
 	d8http "github.com/deckhouse/deckhouse/go_lib/dependency/http"
+	"github.com/deckhouse/deckhouse/go_lib/set"
 )
 
 const (
@@ -171,12 +171,83 @@ func (dml *DeckhouseController) InitModulesAndConfigsStatuses() error {
 			}
 		}
 
+		return dml.updateModuleConfigsStatuses()
+	})
+}
+
+func (dml *DeckhouseController) runEventLoop(moduleEventCh chan events.ModuleEvent) {
+	for event := range moduleEventCh {
+		// events without module name
+		if event.EventType == events.FirstConvergeDone {
+			err := dml.handleConvergeDone()
+			if err != nil {
+				log.Errorf("Error occurred during the converge done: %s", err)
+			}
+			continue
+		}
+
+		if event.EventType == events.ModuleConfigChanged {
+			err := dml.updateModuleConfigsStatuses()
+			if err != nil {
+				log.Errorf("Error occurred when updating module configs: %s", err)
+			}
+			continue
+
+		}
+
+		mod, ok := dml.deckhouseModules[event.ModuleName]
+		if !ok {
+			log.Errorf("Module %q registered but not found in Deckhouse. Possible bug?", event.ModuleName)
+			continue
+		}
+		switch event.EventType {
+		case events.ModuleRegistered:
+			err := dml.handleModuleRegistration(mod)
+			if err != nil {
+				log.Errorf("Error occurred during the module %q registration: %s", mod.GetBasicModule().GetName(), err)
+				continue
+			}
+
+		case events.ModuleEnabled:
+			err := dml.handleEnabledModule(mod, true)
+			if err != nil {
+				log.Errorf("Error occurred during the module %q turning on: %s", mod.GetBasicModule().GetName(), err)
+				continue
+			}
+
+		case events.ModuleDisabled:
+			err := dml.handleEnabledModule(mod, false)
+			if err != nil {
+				log.Errorf("Error occurred during the module %q turning off: %s", mod.GetBasicModule().GetName(), err)
+				continue
+			}
+
+		case events.ModulePhaseChanged:
+			err := dml.updateModuleStatus(event.ModuleName)
+			if err != nil {
+				log.Errorf("Error occurred during the module %q status update: %s", mod.GetBasicModule().GetName(), err)
+				continue
+			}
+		}
+	}
+}
+
+func (dml *DeckhouseController) updateModuleConfigsStatuses(configsNames ...string) error {
+	return retry.OnError(retry.DefaultRetry, errors.IsServiceUnavailable, func() error {
+		configsToUpdate := set.New(configsNames...)
 		moduleConfigs, err := dml.kubeClient.DeckhouseV1alpha1().ModuleConfigs().List(dml.ctx, v1.ListOptions{})
 		if err != nil {
 			return err
 		}
 
 		for _, moduleConfig := range moduleConfigs.Items {
+			// filter which configs should be updated
+			if len(configsToUpdate) > 0 {
+				if _, found := configsToUpdate[moduleConfig.Name]; !found {
+					continue
+				}
+			}
+
 			newModuleConfigStatus := d8config.Service().StatusReporter().ForConfig(&moduleConfig)
 			if (moduleConfig.Status.Message != newModuleConfigStatus.Message) || (moduleConfig.Status.Version != newModuleConfigStatus.Version) {
 				patch, err := json.Marshal([]patchStringValue{{
@@ -185,7 +256,7 @@ func (dml *DeckhouseController) InitModulesAndConfigsStatuses() error {
 					Value: newModuleConfigStatus.Message,
 				}, {
 					Op:    "replace",
-					Path:  "/status/Version",
+					Path:  "/status/version",
 					Value: newModuleConfigStatus.Version,
 				}})
 				if err != nil {
@@ -219,55 +290,7 @@ func (dml *DeckhouseController) InitModulesAndConfigsStatuses() error {
 	})
 }
 
-func (dml *DeckhouseController) runEventLoop(moduleEventCh chan events.ModuleEvent) {
-	for event := range moduleEventCh {
-		// event without module name
-		if event.EventType == events.FirstConvergeDone {
-			err := dml.handleConvergeDone()
-			if err != nil {
-				log.Errorf("Error occurred during the converge done: %s", err)
-			}
-			continue
-		}
-
-		mod, ok := dml.deckhouseModules[event.ModuleName]
-		if !ok {
-			log.Errorf("Module %q registered but not found in Deckhouse. Possible bug?", event.ModuleName)
-			continue
-		}
-		switch event.EventType {
-		case events.ModuleRegistered:
-			err := dml.handleModuleRegistration(mod)
-			if err != nil {
-				log.Errorf("Error occurred during the module %q registration: %s", mod.GetBasicModule().GetName(), err)
-				continue
-			}
-
-		case events.ModuleEnabled:
-			err := dml.handleEnabledModule(mod, true)
-			if err != nil {
-				log.Errorf("Error occurred during the module %q turning on: %s", mod.GetBasicModule().GetName(), err)
-				continue
-			}
-
-		case events.ModuleDisabled:
-			err := dml.handleEnabledModule(mod, false)
-			if err != nil {
-				log.Errorf("Error occurred during the module %q turning off: %s", mod.GetBasicModule().GetName(), err)
-				continue
-			}
-
-		case events.ModulePhaseChanged:
-			err := dml.handleModuleStatusUpdate(event.ModuleName)
-			if err != nil {
-				log.Errorf("Error occurred during the module %q status update: %s", mod.GetBasicModule().GetName(), err)
-				continue
-			}
-		}
-	}
-}
-
-func (dml *DeckhouseController) handleModuleStatusUpdate(moduleName string) error {
+func (dml *DeckhouseController) updateModuleStatus(moduleName string) error {
 	return retry.OnError(retry.DefaultRetry, errors.IsServiceUnavailable, func() error {
 		module, err := dml.kubeClient.DeckhouseV1alpha1().Modules().Get(dml.ctx, moduleName, v1.GetOptions{})
 		if err != nil {
@@ -300,12 +323,8 @@ func (dml *DeckhouseController) handleModuleStatusUpdate(moduleName string) erro
 			return err
 		}
 
-		return nil
+		return dml.updateModuleConfigsStatuses(moduleName)
 	})
-}
-
-func isModuleStatusChanged(currentStatus v1alpha1.ModuleStatus, moduleStatus d8config.ModuleStatus) bool {
-	return currentStatus.Status != moduleStatus.Status
 }
 
 // handleConvergeDone after converge we delete all absent Modules CR, which were not filled during this operator startup
