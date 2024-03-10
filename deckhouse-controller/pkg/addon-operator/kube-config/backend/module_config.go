@@ -17,11 +17,13 @@ package backend
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	logger "github.com/docker/distribution/context"
 	"github.com/flant/addon-operator/pkg/kube_config_manager/config"
 	"github.com/flant/addon-operator/pkg/utils"
+	utils_checksum "github.com/flant/shell-operator/pkg/utils/checksum"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -100,7 +102,7 @@ func (mc ModuleConfigBackend) handleEvent(obj *v1alpha1.ModuleConfig, eventC cha
 		mcfg.IsEnabled = obj.Spec.Enabled
 		cfg.Modules[obj.Name] = &config.ModuleKubeConfig{
 			ModuleConfig: *mcfg,
-			Checksum:     mcfg.Checksum(),
+			Checksum:     utils_checksum.CalculateChecksum(strconv.Itoa(obj.Spec.Version), mcfg.Checksum()),
 		}
 	}
 	eventC <- config.Event{Key: obj.Name, Config: cfg, Op: op}
@@ -131,7 +133,7 @@ func (mc ModuleConfigBackend) LoadConfig(ctx context.Context, _ ...string) (*con
 			mcfg.IsEnabled = item.Spec.Enabled
 			cfg.Modules[item.Name] = &config.ModuleKubeConfig{
 				ModuleConfig: *mcfg,
-				Checksum:     mcfg.Checksum(),
+				Checksum:     utils_checksum.CalculateChecksum(strconv.Itoa(item.Spec.Version), mcfg.Checksum()),
 			}
 		}
 	}
