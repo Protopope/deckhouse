@@ -53,6 +53,7 @@ func New(config *rest.Config, logger logger.Logger) *ModuleConfigBackend {
 }
 
 func (mc ModuleConfigBackend) StartInformer(ctx context.Context, eventC chan config.Event) {
+	mc.logger.Info("Starting config backend informer")
 	// define resyncPeriod for informer
 	resyncPeriod := time.Duration(0) * time.Minute
 
@@ -63,6 +64,7 @@ func (mc ModuleConfigBackend) StartInformer(ctx context.Context, eventC chan con
 	//   if mcInformer was stopped already. But we are controlling its behavior
 	_, _ = mcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			mc.logger.Info("Adding new obj")
 			mconfig := obj.(*v1alpha1.ModuleConfig)
 			mc.handleEvent(mconfig, eventC, config.EventAdd)
 		},

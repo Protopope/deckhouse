@@ -182,7 +182,7 @@ func run(ctx context.Context, operator *addon_operator.AddonOperator) error {
 	// Init deckhouse-config service with ModuleManager instance.
 	d8config.InitService(operator.ModuleManager)
 
-	// Status fields for modules and modulesConfigs get reset
+	// Reset modules` and module configs` status fields
 	err = dController.InitModulesAndConfigsStatuses()
 	if err != nil {
 		return err
