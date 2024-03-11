@@ -100,7 +100,8 @@ properties:
                       items:
                         type: object
                         properties:
-                          name: string
+                          name:
+                            type: string
                 nodeSelector:
                     type: object
                     additionalProperties:
