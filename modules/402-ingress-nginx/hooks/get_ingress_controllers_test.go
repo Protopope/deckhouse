@@ -80,6 +80,7 @@ spec:
   },
   "hostPortWithProxyProtocol": {},
   "hostPort": {},
+  "l2LoadBalancer": {},
   "hostWithFailover": {},
   "loadBalancerWithProxyProtocol": {},
   "acceptRequestsFrom": [
@@ -179,6 +180,7 @@ spec:
 "loadBalancer": {},
 "loadBalancerWithProxyProtocol": {},
 "hostPortWithProxyProtocol": {},
+"l2LoadBalancer": {},
 "hostWithFailover": {},
 "hostPort": {}
 }`))
@@ -197,6 +199,7 @@ spec:
 },
 "loadBalancer": {},
 "loadBalancerWithProxyProtocol": {},
+"l2LoadBalancer": {},
 "hostPortWithProxyProtocol": {"httpPort": 80, "httpsPort": 443},
 "hostWithFailover": {},
 "hostPort": {}
@@ -215,6 +218,7 @@ spec:
   "vpa": {"cpu": {}, "memory": {}}
 },
 "loadBalancer": {},
+"l2LoadBalancer": {},
 "loadBalancerWithProxyProtocol": {},
 "hostPortWithProxyProtocol": {},
 "hostWithFailover": {},
