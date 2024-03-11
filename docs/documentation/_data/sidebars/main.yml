@@ -34,6 +34,82 @@ entries:
             - title: Custom Resources
               url: /cr.html
         - title:
+            en: Module development
+            ru: Разработка модулей
+          folders:
+            - title:
+                en: Description
+                ru: Описание
+              url: /modules-docs/
+            - title:
+                en: Module anatomy
+                ru: Анатомия модуля
+              folders:
+                - title:
+                    en: Description
+                    ru: Описание
+                  url: /modules-docs/module-anatomy/
+                - title:
+                    en: Module folder
+                    ru: Папка с модулем
+                  url: /modules-docs/module-anatomy/module-folder/
+                - title:
+                    en: Container registry
+                    ru: Container registry
+                  url: /modules-docs/module-anatomy/registry/
+                - title:
+                    en: In the Deckhouse cluster
+                    ru: В кластере Deckhouse
+                  url: /modules-docs/module-anatomy/deckhouse/
+            - title:
+                en: Guides to create a module
+                ru: Руководства по созданию модуля
+              folders:
+                - title:
+                    en: Description
+                    ru: Описание
+                  url: /modules-docs/guides/version/
+            - title:
+                en: Chart adapt
+                ru: Адаптируем существующий чарт
+              folders:
+                - title:
+                    en: Description
+                    ru: Описание
+                  url: /modules-docs/chart-adapt/
+                - title:
+                    en: Create a repository
+                    ru: Создайте репозиторий
+                  url: /modules-docs/chart-adapt/clone-repo/
+                - title:
+                    en: Adapt templates
+                    ru: Адаптируйте шаблоны
+                  url: /modules-docs/chart-adapt/modify-templates/
+                - title:
+                    en: Build a container image
+                    ru: Соберите образ контейнера
+                  url: /modules-docs/chart-adapt/build-container-images
+                - title:
+                    en: Add hooks
+                    ru: Добавьте хуки
+                  url: /modules-docs/chart-adapt/hooks/
+                - title:
+                    en: Publish a module
+                    ru: Опубликуйте модуль
+                  url: /modules-docs/chart-adapt/publish-module/
+                - title:
+                    en: Deploy a module into the cluster
+                    ru: Выложите в свой кластер
+                  url: /modules-docs/chart-adapt/deploy/
+                - title:
+                    en: Development mode
+                    ru: Режим разработчика
+                  url: /modules-docs/chart-adapt/development-mode/
+                - title:
+                    en: What's next
+                    ru: Что дальше?
+                  url: /modules-docs/chart-adapt/final-words/
+        - title:
             en: Release channels
             ru: Каналы обновлений
           url: /deckhouse-release-channels.html
