@@ -18,6 +18,7 @@ package hooks
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
 	"github.com/flant/addon-operator/sdk"
@@ -182,7 +183,8 @@ func setInternalValues(input *go_hook.HookInput) error {
 		if found && inlet == "L2LoadBalancer" {
 			var nodeSelectorStr string
 			if nodeSelector, exists := controller.Spec["nodeSelector"]; exists {
-				nodeSelectorStr = nodeSelector.(string)
+				nodeSelectorMap := nodeSelector.(map[string]interface{})
+				nodeSelectorStr = mapToString(nodeSelectorMap)
 			}
 
 			label, _, _ := testing.ExtractFromListOptions(metav1.ListOptions{LabelSelector: nodeSelectorStr})
@@ -219,4 +221,12 @@ func setInternalValues(input *go_hook.HookInput) error {
 	input.Values.Set("ingressNginx.internal.ingressControllers", controllers)
 
 	return nil
+}
+
+func mapToString(m map[string]interface{}) string {
+	keyValueSlice := make([]string, 0, len(m))
+	for key, value := range m {
+		keyValueSlice = append(keyValueSlice, fmt.Sprintf("%s=%s", key, value))
+	}
+	return strings.Join(keyValueSlice, ",")
 }
