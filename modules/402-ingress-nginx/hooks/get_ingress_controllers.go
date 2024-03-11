@@ -22,7 +22,10 @@ import (
 	"github.com/flant/addon-operator/pkg/module_manager/go_hook"
 	"github.com/flant/addon-operator/sdk"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/testing"
 	"k8s.io/utils/pointer"
 )
 
@@ -174,6 +177,37 @@ func setInternalValues(input *go_hook.HookInput) error {
 			// controllerVersion should be absent if not specified explicitly
 			version = defaultControllerVersion // it's used only for metrics
 		}
+
+		inlet, found, err := unstructured.NestedString(controller.Spec, "inlet")
+		if found && inlet == "L2LoadBalancer" {
+			var nodeSelectorStr string
+			if nodeSelector, exists := controller.Spec["nodeSelector"]; exists {
+				nodeSelectorStr = nodeSelector.(string)
+			}
+
+			label, _, _ := testing.ExtractFromListOptions(metav1.ListOptions{LabelSelector: nodeSelectorStr})
+			if label == nil {
+				label = labels.Everything()
+			}
+
+			nodes := make([]map[string]string, 0, len(controllersFilterResult))
+
+			nodesInfo := input.Snapshots["nodes"]
+			for _, nl := range nodesInfo {
+				nodeInfo := nl.(NodeLabelsInfo)
+
+				if label.Matches(labels.Set(nodeInfo.Labels)) {
+					nodes = append(
+						nodes,
+						map[string]string{"name": nodeInfo.Name},
+					)
+				}
+			}
+			nestedL2Balancer := make(map[string]interface{})
+			nestedL2Balancer["nodes"] = nodes
+			controller.Spec["l2LoadBalancer"] = nestedL2Balancer
+		}
+
 		controllers = append(controllers, controller)
 
 		input.MetricsCollector.Set("d8_ingress_nginx_controller", 1, map[string]string{

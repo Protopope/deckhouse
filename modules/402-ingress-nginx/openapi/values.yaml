@@ -98,7 +98,9 @@ properties:
                       description: |
                         Names of preferred nodes
                       items:
-                        type: string
+                        type: object
+                        properties:
+                          name: string
                 nodeSelector:
                     type: object
                     additionalProperties:
