@@ -60,7 +60,7 @@ spec:
                           description: |
                             Проверка TLS-сертификата удаленного хоста.
 
-                            Если установлен в `false`, то сертификат не проверяется на наличие в списке отозванных сертификатов (Certificate Revocation Lists).
+                            Если параметр установлен в `false`, сертификат не проверяется на наличие в списке отозванных сертификатов (Certificate Revocation Lists).
                 elasticsearch:
                   properties:
                     auth:
