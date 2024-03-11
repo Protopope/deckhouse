@@ -55,7 +55,6 @@ var _ = sdk.RegisterFunc(&go_hook.HookConfig{
 			ApiVersion:                   "v1",
 			Kind:                         "Node",
 			WaitForSynchronization:       pointer.Bool(false),
-			ExecuteHookOnEvents:          pointer.Bool(false),
 			ExecuteHookOnSynchronization: pointer.Bool(false),
 			FilterFunc:                   applyNodeFilter,
 		},
@@ -180,6 +179,9 @@ func setInternalValues(input *go_hook.HookInput) error {
 		}
 
 		inlet, found, err := unstructured.NestedString(controller.Spec, "inlet")
+		if err != nil {
+			return fmt.Errorf("cannot get inlet type from ingress controller spec: %v", err)
+		}
 		if found && inlet == "L2LoadBalancer" {
 			var nodeSelectorStr string
 			if nodeSelector, exists := controller.Spec["nodeSelector"]; exists {
