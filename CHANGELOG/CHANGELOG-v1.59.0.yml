@@ -1,0 +1,76 @@
+admission-policy-engine:
+  fixes:
+    - summary: Added the ability to specify restrictions on applying cluster roles to users.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7660
+cloud-provider-openstack:
+  features:
+    - summary: Add alert about orphaned disks (without PV) in the cloud.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7458
+cloud-provider-vsphere:
+  features:
+    - summary: Added a parameter that allows you to use an existing vm folder.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7667
+cloud-provider-yandex:
+  features:
+    - summary: Add a feature to discover orphaned disks for YandexCloud.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7603
+dashboard:
+  fixes:
+    - summary: Add cm kube-rbac-proxy-ca.crt in namespace d8-dashboard.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7766
+deckhouse:
+  features:
+    - summary: Create embedded default ModuleUpdatePolicy, if no others are set.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7703
+    - summary: Add `Ignore` mode for ModuleUpdatePolicy to exclude desired modules.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7703
+deckhouse-controller:
+  features:
+    - summary: Provides deckhouse HA mode.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7634
+    - summary: Added module loading metrics.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7424
+dhctl:
+  features:
+    - summary: Added debug output for `dhctl mirror` when `DHCTL_DEBUG` is set.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7739
+extended-monitoring:
+  features:
+    - summary: >-
+        Support force image check with image-availability-exporter, even when workloads are disabled
+        or suspended.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7606
+external-module-manager:
+  features:
+    - summary: Disable module hooks on restart.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7582
+  fixes:
+    - summary: Fix panic at a module status update.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7648
+go_lib:
+  features:
+    - summary: Add orphaned disks reconcile function.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7458
+node-manager:
+  fixes:
+    - summary: >-
+        Add the `PasswordAuthentication=no` option to the OpenSSH client if public key
+        authentication is used.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7621
+    - summary: Check for `SSHCredentials` in the `StaticInstance` webhook.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7619
+    - summary: Fix the cleanup phase in the 'caps-controller-manager' if the cleanup script does not exist.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7615
+    - summary: >-
+        Added NodeGroup validation to prevent adding more than one taint with the same key and
+        effect.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7474
+    - summary: Fix a race in instance controller if NodeGroup has been deleted.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7454
+    - summary: added alert on impossible node drain
+      pull_request: https://github.com/deckhouse/deckhouse/pull/6190
+user-authn:
+  features:
+    - summary: Add option `addKubeconfigGeneratorEntry`.
+      pull_request: https://github.com/deckhouse/deckhouse/pull/7545
+
