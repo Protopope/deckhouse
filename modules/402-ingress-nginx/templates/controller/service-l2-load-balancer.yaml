@@ -12,7 +12,7 @@ metadata:
   namespace: d8-ingress-nginx
   {{- include "helm_lib_module_labels" (list $context (dict "app" "controller" "name" $crd.name )) | nindent 2 }}
   annotations:
-    metallb.universe.tf/preferredL2SpeakerNode: {{ $node }}
+    metallb.universe.tf/preferredL2SpeakerNode: {{ $node.name }}
     {{- if $addressPool }}
     metallb.universe.tf/address-pool: {{ $addressPool }}
     {{- end }}
